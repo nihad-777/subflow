@@ -1,8 +1,10 @@
 import { createContext, FormEvent, useContext, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, Bell, Check, CircleHelp, Command, Home, LogOut, Menu, Shield, Users, X } from 'lucide-react'
+import { ArrowRight, Bell, Check, CircleHelp, Command, Home, LogOut, Menu, Package, Shield, Users, X } from 'lucide-react'
 import type { Session, User } from '@supabase/supabase-js'
 import { AppRole, isSupabaseConfigured, Profile, supabase } from './supabase'
+import ProductWorkspace from './ProductWorkspace.jsx'
+import './styles.css'
 
 type AuthState = { session: Session | null; user: User | null; profile: Profile | null; loading: boolean; refreshProfile: () => Promise<void> }
 const AuthContext = createContext<AuthState>({ session: null, user: null, profile: null, loading: true, refreshProfile: async () => {} })
@@ -33,7 +35,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ConfigNotice() {
-  return <main className="config-screen"><div className="config-card"><Brand /><span className="eyebrow">Setup needed</span><h1>Connect your Supabase project</h1><p>Add the project URL and anon key to <code>frontend/.env</code>, then restart the frontend.</p><div className="setup-code">VITE_SUPABASE_URL=…<br />VITE_SUPABASE_ANON_KEY=…</div></div></main>
+  return <main className="config-screen"><div className="config-card"><Brand /><span className="eyebrow">Setup needed</span><h1>Connect your Supabase project</h1><p>Add the project URL and publishable key to <code>client/.env</code>, then restart the frontend.</p><div className="setup-code">VITE_SUPABASE_URL=…<br />VITE_SUPABASE_ANON_KEY=…</div></div></main>
 }
 
 function Brand() { return <div className="brand"><span className="brand-mark"><Command size={18} strokeWidth={2.5} /></span><span>subflow<span className="brand-dot">.</span></span></div> }
@@ -90,6 +92,7 @@ function Protected({ children, role }: { children: React.ReactNode; role?: AppRo
 const menu = [
   { label: 'Overview', icon: Home, path: '' },
   { label: 'My profile', icon: Users, path: '/profile' },
+  { label: 'Products & plans', icon: Package, path: '/catalog', admin: true },
   { label: 'Team members', icon: Users, path: '/team', admin: true },
 ]
 
@@ -139,11 +142,12 @@ function ProfilePage() {
 function WorkspaceRoute() {
   if (window.location.pathname.endsWith('/team')) return <Protected role="admin"><Workspace><TeamPage /></Workspace></Protected>
   if (window.location.pathname.endsWith('/profile')) return <Protected><Workspace><ProfilePage /></Workspace></Protected>
+  if (window.location.pathname.endsWith('/catalog')) return <Protected role="admin"><Workspace><ProductWorkspace /></Workspace></Protected>
   return <Protected><Workspace><DashboardPage /></Workspace></Protected>
 }
 
 function App() {
-  return <AuthProvider>{!isSupabaseConfigured ? <ConfigNotice /> : <Routes><Route path="/" element={<Navigate to="/app" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/reset" element={<ResetPage />} /><Route path="/update-password" element={<UpdatePasswordPage />} /><Route path="/app" element={<AppHome />} /><Route path="/app/:role" element={<WorkspaceRoute />} /><Route path="/app/team" element={<WorkspaceRoute />} /><Route path="/app/profile" element={<WorkspaceRoute />} /><Route path="*" element={<Navigate to="/app" replace />} /></Routes>}</AuthProvider>
+  return <AuthProvider>{!isSupabaseConfigured ? <ConfigNotice /> : <Routes><Route path="/" element={<Navigate to="/app" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/reset" element={<ResetPage />} /><Route path="/update-password" element={<UpdatePasswordPage />} /><Route path="/app" element={<AppHome />} /><Route path="/app/:role" element={<WorkspaceRoute />} /><Route path="/app/team" element={<WorkspaceRoute />} /><Route path="/app/profile" element={<WorkspaceRoute />} /><Route path="/app/catalog" element={<WorkspaceRoute />} /><Route path="*" element={<Navigate to="/app" replace />} /></Routes>}</AuthProvider>
 }
 
 function AppHome() { const { loading, user, profile } = useAuth(); if (loading) return <div className="loading-screen"><span className="spinner" /> Loading your workspace</div>; if (!user) return <Navigate to="/login" replace />; return <Navigate to={`/app/${profile?.role || 'customer'}`} replace /> }
