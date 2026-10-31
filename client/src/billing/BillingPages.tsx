@@ -7,6 +7,7 @@ import { date, money, today } from '../finance/lib/format';
 import { useAsync, useDebounced } from '../finance/lib/useAsync';
 import type { Paged } from '../finance/lib/types';
 import { Badge, Drawer, Empty, ErrorBanner, Field, Modal, PageHeader, Pagination, TableSkeleton, Toast, type Tone } from '../finance/components/ui';
+import { RecordPaymentModal } from '../finance/components/RecordPaymentModal';
 import MyPaymentsPage from '../finance/pages/MyPaymentsPage';
 import '../finance/finance.css';
 
@@ -103,7 +104,7 @@ function NewSubscription({ open, onClose, onCreated }: { open: boolean; onClose:
   const [lines, setLines] = useState([{ productId: '', variantId: '', quantity: 1, taxRuleId: '' }]);
   const [error, setError] = useState<Error | null>(null);
   const set = (key: keyof typeof blank, value: string | number) => setForm({ ...form, [key]: value });
-  const setLine = (i: number, key: string, value: string | number) => setLines(lines.map((l, n) => (n === i ? { ...l, [key]: value } : l)));
+  const setLine = (i: number, key: string, value: string | number) => setLines(lines.map((l, n) => (n === i ? { ...l, [key]: value, ...(key === 'productId' ? { variantId: '' } : {}) } : l)));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -290,6 +291,7 @@ function InvoiceDrawer({ id, portal, onClose, onChanged }: { id: string | null; 
   const detail = useAsync(() => (id ? api.get<InvoiceDetail>(`${base}/${id}`) : Promise.resolve(null)), [id]);
   const [error, setError] = useState<Error | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
   const invoice = detail.data;
   const act = async (action: string) => {
     setError(null);
@@ -314,12 +316,14 @@ function InvoiceDrawer({ id, portal, onClose, onChanged }: { id: string | null; 
           <InvoiceLines invoice={invoice} />
           <div className="flex flex-wrap gap-2">
             {!portal && invoice.status === 'draft' && <button className="btn-primary" onClick={() => void act('confirm')}>Confirm</button>}
+            {!portal && invoice.status === 'confirmed' && <button className="btn-primary" onClick={() => setPaying(true)}>Record payment</button>}
             {!portal && (invoice.status === 'confirmed' || invoice.status === 'paid') && <button className="btn-secondary" onClick={() => void act('send')}>Send by email</button>}
             {!portal && (invoice.status === 'draft' || invoice.status === 'confirmed') && <button className="btn-danger" onClick={() => void act('cancel')}>Cancel invoice</button>}
             <button className="btn-secondary" onClick={() => void pdf()}>Download PDF</button>
           </div>
         </>
       )}
+      {!portal && <RecordPaymentModal open={paying} invoiceId={id ?? undefined} onClose={() => setPaying(false)} onRecorded={() => { setPaying(false); detail.reload(); onChanged(); }} />}
       <Toast message={toast} onDone={() => setToast(null)} />
     </Drawer>
   );

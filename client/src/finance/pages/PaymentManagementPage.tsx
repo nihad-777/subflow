@@ -71,7 +71,7 @@ export default function PaymentManagementPage({ onOpenHistory }: { onOpenHistory
 
       <RecordPaymentModal open={open} invoiceId={invoiceId} onClose={() => setOpen(false)}
         onRecorded={(r) => {
-          setToast(r.replayed ? 'Already recorded (duplicate submit ignored)' : `${money(r.payment.amount)} recorded on ${r.invoice.number}${r.invoice.status === 'PAID' ? ' · invoice is now Paid' : ` · ${money(r.invoice.outstanding)} still outstanding`}`);
+          setToast(r.replayed ? 'Already recorded (duplicate submit ignored)' : `${money(r.payment.amount)} recorded on ${r.invoice.number}${r.invoice.status === 'paid' ? ' · invoice is now Paid' : ` · ${money(r.invoice.outstanding)} still outstanding`}`);
           payable.reload(); todays.reload();
         }} />
       <Toast message={toast} onDone={() => setToast(null)} />

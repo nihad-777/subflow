@@ -119,7 +119,7 @@ export default function PaymentHistoryPage() {
       </div>
 
       <RecordPaymentModal open={recording} onClose={() => setRecording(false)}
-        onRecorded={(r) => { setToast(`${money(r.payment.amount)} recorded on ${r.invoice.number}${r.invoice.status === 'PAID' ? ' · invoice is now Paid' : ''}`); list.reload(); }} />
+        onRecorded={(r) => { setToast(`${money(r.payment.amount)} recorded on ${r.invoice.number}${r.invoice.status === 'paid' ? ' · invoice is now Paid' : ''}`); list.reload(); }} />
       <VoidModal payment={voiding} onClose={() => setVoiding(null)} onDone={() => { setVoiding(null); setToast('Payment voided'); list.reload(); }} />
       <Toast message={toast} onDone={() => setToast(null)} />
     </div>

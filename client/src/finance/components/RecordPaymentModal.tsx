@@ -143,11 +143,11 @@ export function RecordPaymentModal({ open, onClose, invoiceId, onRecorded }: Pro
           </div>
         )}
 
-        {selected && selected.status !== 'CONFIRMED' && (
+        {selected && selected.status !== 'confirmed' && (
           <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">This invoice is {selected.status.toLowerCase()} and cannot take payments.</p>
         )}
 
-        {selected && selected.status === 'CONFIRMED' && (
+        {selected && selected.status === 'confirmed' && (
           <>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Amount" error={fieldErrors.amount ?? (amount ? clientErrors.amount : undefined)}>
@@ -178,7 +178,7 @@ export function RecordPaymentModal({ open, onClose, invoiceId, onRecorded }: Pro
 
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn-primary" disabled={!selected || selected.status !== 'CONFIRMED' || posting || Object.keys(clientErrors).length > 0}>
+          <button type="submit" className="btn-primary" disabled={!selected || selected.status !== 'confirmed' || posting || Object.keys(clientErrors).length > 0}>
             {posting && <Spinner />} Record payment
           </button>
         </div>
