@@ -220,8 +220,8 @@ export default function App() {
     finally { setBusy(false); }
   }
 
-  if (!demoMode && (!supabaseUrl || !supabaseKey)) return <main className="grid min-h-screen place-items-center bg-slate-50 p-4"><section className="w-full max-w-md space-y-4 rounded-xl border bg-white p-8 shadow-sm"><h1 className="text-2xl font-bold text-violet-700">Subflow</h1><p className="text-slate-600">Preview the product, plans, and quotation screens before connecting Supabase.</p><button onClick={startPreview} className="w-full rounded bg-violet-600 px-4 py-2 text-white">Preview catalog</button></section></main>;
-  if (!demoMode && !session?.access_token) return <main className="grid min-h-screen place-items-center bg-slate-50 p-4"><form onSubmit={submitLogin} className="w-full max-w-md space-y-4 rounded-xl border bg-white p-8 shadow-sm"><h1 className="text-2xl font-bold text-violet-700">Subflow</h1><p className="text-slate-500">Sign in with your workspace administrator account.</p><label className="block text-sm">Email<input required type="email" className="mt-1 w-full rounded border p-2" value={email} onChange={(e) => setEmail(e.target.value)} /></label><label className="block text-sm">Password<input required type="password" className="mt-1 w-full rounded border p-2" value={password} onChange={(e) => setPassword(e.target.value)} /></label>{loginError && <p className="text-sm text-red-600">{loginError}</p>}<button disabled={busy} className="w-full rounded bg-violet-600 px-4 py-2 text-white">{busy ? 'Signing in…' : 'Sign in'}</button><button type="button" onClick={startPreview} className="w-full rounded border px-4 py-2 text-slate-700">Preview catalog</button></form></main>;
+  if (!demoMode && (!supabaseUrl || !supabaseKey)) return <main className="catalog-gate"><section className="catalog-gate-card"><div className="catalog-brand gate-brand"><span className="catalog-brand-mark">S</span><span>subflow<span className="catalog-brand-dot">.</span></span></div><p className="catalog-eyebrow">PRODUCT WORKSPACE</p><h1>Build your catalog</h1><p>Preview the product, plans, and quotation screens before connecting Supabase.</p><button onClick={startPreview} className="catalog-primary-button gate-button">Preview catalog</button></section></main>;
+  if (!demoMode && !session?.access_token) return <main className="catalog-gate"><form onSubmit={submitLogin} className="catalog-gate-card"><div className="catalog-brand gate-brand"><span className="catalog-brand-mark">S</span><span>subflow<span className="catalog-brand-dot">.</span></span></div><p className="catalog-eyebrow">WELCOME BACK</p><h1>Sign in to your workspace</h1><p>Use your workspace administrator account to manage the catalog.</p><label>Email<input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label><label>Password<input required type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>{loginError && <p className="text-sm text-red-600">{loginError}</p>}<button disabled={busy} className="catalog-primary-button gate-button">{busy ? 'Signing in…' : 'Sign in'}</button><button type="button" onClick={startPreview} className="catalog-secondary-button gate-button">Preview catalog</button></form></main>;
 
   function changeVariant(index, key, value) {
     setForm({
@@ -242,51 +242,58 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-800">
-      <header className="flex items-center justify-between border-b bg-white px-8 py-4">
-        <h1 className="text-xl font-bold text-violet-700">Subflow</h1>
-        <div className="flex items-center gap-4">{demoMode && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">Preview mode</span>}<span className="text-sm text-slate-500">Product &amp; Plans</span><button onClick={() => demoMode ? exitPreview() : updateSession(null)} className="text-sm text-violet-700">{demoMode ? 'Exit preview' : 'Sign out'}</button></div>
-      </header>
-
-      <section className="mx-auto max-w-6xl p-8">
-        {error && <p role="alert" className="mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-        {demoMode && <p className="mb-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Preview data is saved in this browser only. Connect Supabase later to use shared workspace data.</p>}
-        {busy && <p className="mb-3 text-xs text-slate-500">Saving changes…</p>}
-        <nav className="mb-8 flex gap-3">
+    <main className="catalog-app">
+      <aside className="catalog-sidebar">
+        <div className="catalog-brand"><span className="catalog-brand-mark">S</span><span>subflow<span className="catalog-brand-dot">.</span></span></div>
+        <div className="catalog-workspace"><span className="catalog-workspace-avatar">S</span><span><b>Subflow workspace</b><small>Product management</small></span><span className="catalog-chevron">⌄</span></div>
+        <span className="catalog-side-label">WORKSPACE</span>
+        <nav className="catalog-nav" aria-label="Product management sections">
           {['Products', 'Plans', 'Quotations'].map((name) => (
-            <button
-              key={name}
-              onClick={() => setPage(name)}
-              className={`rounded-lg px-4 py-2 ${
-                page === name
-                  ? 'bg-violet-600 text-white'
-                  : 'bg-white text-slate-700'
-              }`}
-            >
-              {name}
+            <button key={name} onClick={() => setPage(name)} className={page === name ? 'catalog-nav-link active' : 'catalog-nav-link'}>
+              <span className="catalog-nav-icon">{name === 'Products' ? 'P' : name === 'Plans' ? '↗' : '≡'}</span><span>{name === 'Quotations' ? 'Quotation templates' : name}</span>
             </button>
           ))}
         </nav>
+        <div className="catalog-sidebar-bottom"><span className="catalog-help-mark">?</span><b>Product &amp; Plans</b><small>Catalog workspace</small></div>
+      </aside>
 
-        <div className="mb-6 flex items-center justify-between">
+      <div className="catalog-main-column">
+      <header className="catalog-topbar">
+        <div className="catalog-breadcrumb">Workspace <span>/</span> <b>{page === 'Quotations' ? 'Quotation templates' : page}</b></div>
+        <div className="catalog-header-actions">{demoMode && <span className="catalog-preview-pill">Preview mode</span>}<span className="catalog-header-label">Product &amp; Plans</span><button onClick={() => demoMode ? exitPreview() : updateSession(null)} className="catalog-signout">{demoMode ? 'Exit preview' : 'Sign out'}</button></div>
+      </header>
+
+      <section className="catalog-content">
+        {error && <p role="alert" className="mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        {demoMode && <p className="catalog-demo-note">Preview data is saved in this browser only. Connect Supabase later to use shared workspace data.</p>}
+        {busy && <p className="mb-3 text-xs text-slate-500">Saving changes…</p>}
+        <div className="catalog-page-heading">
           <div>
-            <p className="text-sm text-slate-500">PRODUCT CATALOG</p>
-            <h2 className="mt-1 text-3xl font-bold">
+            <p className="catalog-eyebrow">PRODUCT CATALOG</p>
+            <h2 className="catalog-title">
               {page === 'Quotations' ? 'Quotation templates' : page}
             </h2>
+            <p className="catalog-subtitle">{page === 'Products' ? 'Manage your products, pricing, and available variants.' : page === 'Plans' ? 'Build subscription plans and choose what each plan includes.' : 'Create reusable quotation templates for your customers.'}</p>
           </div>
 
           <button
             onClick={() => openForm()}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-white"
+            className="catalog-primary-button"
           >
-            + Add {page === 'Products' ? 'product' : page === 'Plans' ? 'plan' : 'template'}
+            <span className="catalog-plus">+</span> Add {page === 'Products' ? 'product' : page === 'Plans' ? 'plan' : 'template'}
           </button>
         </div>
 
-        <div className="overflow-x-auto rounded-xl border bg-white">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-100 text-slate-500">
+        <div className="catalog-metrics">
+          <div className="catalog-metric-card"><span className="catalog-metric-icon mint">P</span><div><small>Total products</small><strong>{products.length}</strong></div></div>
+          <div className="catalog-metric-card"><span className="catalog-metric-icon sage">↗</span><div><small>Subscription plans</small><strong>{plans.length}</strong></div></div>
+          <div className="catalog-metric-card"><span className="catalog-metric-icon sand">≡</span><div><small>Quotation templates</small><strong>{quotes.length}</strong></div></div>
+        </div>
+
+        <div className="catalog-table-wrap">
+          <div className="catalog-table-heading"><div><h3>{page === 'Quotations' ? 'Saved templates' : page === 'Plans' ? 'Your plans' : 'Product list'}</h3><p>Review and manage items in your workspace.</p></div><span className="catalog-count-badge">{rows.length} {rows.length === 1 ? 'item' : 'items'}</span></div>
+          <table className="catalog-table">
+            <thead>
               <tr>
                 <th className="p-4">Name</th>
                 <th className="p-4">
@@ -306,23 +313,23 @@ export default function App() {
 
             <tbody>
               {rows.map((item) => (
-                <tr key={item.id} className="border-t">
+                <tr key={item.id}>
                   <td className="p-4 font-medium">
                     {item.name}
 
                     {page === 'Products' && (
                       <>
-                        <div className="text-xs text-slate-500">
+                        <div className="catalog-row-detail">
                           {item.description || 'No description'}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="catalog-row-detail">
                           {item.variants.length} variants
                         </div>
                       </>
                     )}
 
                     {page === 'Plans' && (
-                      <div className="text-xs text-slate-500">
+                      <div className="catalog-row-detail">
                         {item.productIds
                           .map((id) => products.find((product) => product.id === id)?.name)
                           .filter(Boolean)
@@ -354,13 +361,13 @@ export default function App() {
                   <td className="space-x-3 p-4">
                     <button
                       onClick={() => openForm(item)}
-                      className="text-violet-700"
+                      className="catalog-edit-action"
                     >
                       Edit
                     </button>
                     <button
                       onClick={() => deleteRow(item.id)}
-                      className="text-red-600"
+                      className="catalog-delete-action"
                     >
                       Delete
                     </button>
@@ -371,22 +378,22 @@ export default function App() {
           </table>
 
           {rows.length === 0 && (
-            <p className="p-10 text-center text-slate-500">
-              No {page.toLowerCase()} yet.
-            </p>
+            <div className="catalog-empty"><span className="catalog-empty-icon">＋</span><b>No {page.toLowerCase()} yet</b><p>Add your first {page === 'Products' ? 'product' : page === 'Plans' ? 'plan' : 'quotation template'} to get started.</p></div>
           )}
         </div>
       </section>
+      </div>
 
       {form && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setForm(null); }}>
+        <div className="catalog-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setForm(null); }}>
           <form
             onSubmit={save}
             role="dialog"
             aria-modal="true"
             aria-labelledby="catalog-form-title"
-            className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+            className="catalog-dialog space-y-4"
           >
+            <p className="catalog-dialog-eyebrow">{editingId ? 'EDIT DETAILS' : 'NEW ENTRY'}</p>
             <h3 id="catalog-form-title" className="text-xl font-bold">
               {editingId ? 'Edit' : 'Add'}{' '}
               {page === 'Products'
@@ -469,7 +476,7 @@ export default function App() {
                   <span>Variants</span>
                   <button
                     type="button"
-                    className="text-violet-700"
+                    className="catalog-text-action"
                     onClick={() =>
                       setForm({
                         ...form,
@@ -485,7 +492,7 @@ export default function App() {
                 </div>
 
                 {form.variants.map((variant, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-slate-100 p-3">
+                  <div key={i} className="catalog-variant-row grid grid-cols-2 gap-2 rounded-lg border border-slate-100 p-3">
                     <input
                       required
                       placeholder="Variant name"
@@ -507,14 +514,14 @@ export default function App() {
                         changeVariant(i, 'priceAdjustment', e.target.value)
                       }
                     />
-                    <span className="col-span-2 text-xs text-slate-500">
+                    <span className="catalog-variant-price col-span-2 text-xs text-slate-500">
                       Variant price:{' '}
                       {money(
                         Number(form.price || 0) +
                           Number(variant.priceAdjustment || 0)
                       )}
                     </span>
-                    <button type="button" className="col-span-2 justify-self-start text-xs text-red-600" onClick={() => setForm({ ...form, variants: form.variants.filter((_, index) => index !== i) })}>Remove variant</button>
+                    <button type="button" className="catalog-remove-action col-span-2 justify-self-start text-xs text-red-600" onClick={() => setForm({ ...form, variants: form.variants.filter((_, index) => index !== i) })}>Remove variant</button>
                   </div>
                 ))}
               </>
@@ -669,7 +676,7 @@ export default function App() {
                   <span>Quotation line items</span>
                   <button
                     type="button"
-                    className="text-violet-700"
+                    className="catalog-text-action"
                     onClick={() =>
                       setForm({
                         ...form,
@@ -685,7 +692,7 @@ export default function App() {
                 </div>
 
                 {form.lineItems.map((line, index) => (
-                  <div key={index} className="grid grid-cols-3 gap-2">
+                  <div key={index} className="catalog-line-row grid grid-cols-3 gap-2">
                     <input
                       required
                       placeholder="Description"
@@ -733,7 +740,7 @@ export default function App() {
                     </button>
                   </div>
                 ))}
-                <p className="text-right text-sm font-semibold text-slate-700">
+                <p className="catalog-estimate text-right text-sm font-semibold text-slate-700">
                   Estimated total: {money(form.lineItems.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0))}
                 </p>
               </>
@@ -743,11 +750,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setForm(null)}
-                className="rounded border px-4 py-2"
+                className="catalog-secondary-button"
               >
                 Cancel
               </button>
-              <button disabled={busy} className="rounded bg-violet-600 px-4 py-2 text-white disabled:opacity-60">
+              <button disabled={busy} className="catalog-primary-button">
                 {busy ? 'Saving…' : 'Save'}
               </button>
             </div>
