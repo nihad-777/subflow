@@ -1,6 +1,12 @@
-# Subflow
+## Overview
 
-Subflow team application with authentication, role-based workspaces, and product management.
+Subflow is a subscription management application designed to simplify
+the management of products, plans, quotations, subscriptions, invoices,
+payments and customer interactions.
+
+The application provides role-based workspaces for administrators,
+staff members and customers, bringing subscription and billing
+operations together in one platform.
 
 ## Stack
 
@@ -8,9 +14,24 @@ Subflow team application with authentication, role-based workspaces, and product
 - Node.js + Express API (`backend/`)
 - Supabase Auth and Postgres
 
+## Prerequisites
+
+Make sure you have the following installed:
+
+- Node.js (LTS version)
+- npm
+- Git
+- A Supabase account and project
+- PostgreSQL (for running backend tests locally)
+
 ## Local setup
 
-1. Coordinate Supabase project setup and run these in its SQL Editor, in this order: `database/schema.sql`, `product_catalog.sql`, `subscriptions_billing.sql`, `billing_integration.sql`, `payments_analytics.sql`.
+1. Coordinate Supabase project setup and run these files in its SQL Editor, in this order:
+   - `database/schema.sql`
+   - `database/product_catalog.sql`
+   - `database/subscriptions_billing.sql`
+   - `database/billing_integration.sql`
+   - `database/payments_analytics.sql`
 2. Copy `client/.env.example` to `client/.env` and set the project URL and publishable key.
 3. Copy `backend/.env.example` to `backend/.env`. Set the project URL, anon key, service role key and `DATABASE_URL` (Supabase > Connect > Session pooler) there. Keep these private and server-side.
 4. Register the first trusted account, then set its role to `admin` in the SQL Editor with `update public.profiles set role = 'admin' where email = 'you@example.com';`.
