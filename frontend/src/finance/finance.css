@@ -1,0 +1,32 @@
+/* Tailwind for the finance pages only: no preflight (so the app's own styles are
+   untouched) and only classes used under src/finance are generated. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";
+
+/* Map the accent to Subflow's green. */
+@theme {
+  --color-indigo-50: #edf6f0;
+  --color-indigo-100: #dcefe3;
+  --color-indigo-500: #3c7357;
+  --color-indigo-600: #176b50;
+  --color-indigo-700: #10583f;
+}
+
+@layer utilities {
+  .sf-finance { font-family: 'DM Sans', sans-serif; color: #17241f; }
+  .sf-finance .card { @apply rounded-xl border border-slate-200 bg-white shadow-sm; }
+  .sf-finance .btn-primary { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 bg-indigo-600 text-white hover:bg-indigo-700; border: 0; }
+  .sf-finance .btn-secondary { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 border border-solid border-slate-300 bg-white text-slate-700 hover:bg-slate-50; }
+  .sf-finance .btn-danger { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 bg-rose-600 text-white hover:bg-rose-700; border: 0; }
+  .sf-finance .btn-ghost { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 bg-transparent text-slate-600 hover:bg-slate-100; border: 0; }
+  .sf-finance .input { @apply w-full rounded-lg border border-solid border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100; }
+  .sf-finance .label { @apply mb-1 block text-xs font-medium text-slate-600; }
+  .sf-finance .field-error { @apply mt-1 text-xs text-rose-600; }
+  .sf-finance .th { @apply px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
+  .sf-finance .td { @apply px-4 py-2.5 text-sm text-slate-700; }
+  .sf-finance table { border-collapse: collapse; }
+  .sf-finance h1, .sf-finance h2, .sf-finance h3, .sf-finance p, .sf-finance dl, .sf-finance dd, .sf-finance ul { margin: 0; padding: 0; }
+  .sf-finance ul { list-style: none; }
+}
