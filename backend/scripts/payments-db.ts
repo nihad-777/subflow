@@ -1,6 +1,5 @@
 // LOCAL DEV/TEST database setup for the payments & analytics module.
-// Applies, in order: dev/local_supabase_shim.sql, schema.sql (auth/profiles),
-// dev/member3_tables_stub.sql, payments_analytics.sql.
+// Applies the shim, then the team's SQL files in their Supabase order.
 //   --reset   drop and recreate the public + auth schemas first
 // On Supabase, run database/payments_analytics.sql in the SQL Editor instead.
 import 'dotenv/config';
@@ -9,7 +8,7 @@ import { join } from 'node:path';
 import pg from 'pg';
 
 const DB_DIR = join(import.meta.dirname, '..', '..', 'database');
-const FILES = ['dev/local_supabase_shim.sql', 'schema.sql', 'dev/member3_tables_stub.sql', 'payments_analytics.sql'];
+const FILES = ['dev/local_supabase_shim.sql', 'schema.sql', 'product_catalog.sql', 'subscriptions_billing.sql', 'billing_integration.sql', 'payments_analytics.sql'];
 
 export async function setupLocalDb(opts: { reset?: boolean; url?: string } = {}) {
   const url = opts.url ?? process.env.DATABASE_URL ?? '';

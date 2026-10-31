@@ -8,7 +8,7 @@ import pg from 'pg';
 import { addDays, todayStr } from './lib/dates.js';
 import { centsToSql } from './lib/money.js';
 
-const LARGE = process.env.SEED_SCALE === 'large';
+const LARGE = process.argv.includes('--large');
 const url = process.env.DATABASE_URL ?? '';
 if (/supabase\.(co|com)/.test(url) && process.env.SEED_ALLOW_REMOTE !== 'true') {
   console.error('Refusing to wipe a Supabase database. Set SEED_ALLOW_REMOTE=true if you really mean it.');
@@ -50,10 +50,10 @@ const PRODUCTS = [
   { id: 5, name: 'API access', price: 3000_00 },
 ];
 const PLANS = [
-  { id: 1, name: 'Starter Monthly', price: 999_00, period: 'Monthly' },
-  { id: 2, name: 'Pro Monthly', price: 2999_00, period: 'Monthly' },
-  { id: 3, name: 'Pro Yearly', price: 29999_00, period: 'Yearly' },
-  { id: 4, name: 'Flex Weekly', price: 299_00, period: 'Weekly' },
+  { id: 1, name: 'Starter Monthly', price: 999_00, period: 'monthly' },
+  { id: 2, name: 'Pro Monthly', price: 2999_00, period: 'monthly' },
+  { id: 3, name: 'Pro Yearly', price: 29999_00, period: 'yearly' },
+  { id: 4, name: 'Flex Weekly', price: 299_00, period: 'weekly' },
 ];
 const TAX_RATE = 0.18;
 
@@ -103,7 +103,7 @@ async function main() {
 
   await insertMany(client, 'products', ['id', 'name', 'price'], ['uuid', 'text', 'numeric'],
     PRODUCTS.map((p) => [PRODUCT(p.id), p.name, centsToSql(p.price)]));
-  await insertMany(client, 'plans', ['id', 'name', 'price', 'billing_period'], ['uuid', 'text', 'numeric', 'text'],
+  await insertMany(client, 'plans', ['id', 'name', 'price', 'frequency'], ['uuid', 'text', 'numeric', 'text'],
     PLANS.map((p) => [PLAN(p.id), p.name, centsToSql(p.price), p.period]));
 
   // --- subscriptions ------------------------------------------------------------
@@ -113,15 +113,16 @@ async function main() {
     const plan = i <= 3 ? PLANS[1] : pick(PLANS);
     const customer = i <= 3 ? DEMO_USERS.customer : uuid(101 + int(0, nCustomers - 1));
     const r = rand();
-    const status = i <= 6 ? 'Active' : r < 0.78 ? 'Active' : r < 0.88 ? 'Closed' : r < 0.94 ? 'Confirmed' : 'Quotation';
+    const status = i <= 6 ? 'active' : r < 0.78 ? 'active' : r < 0.88 ? 'closed' : r < 0.94 ? 'confirmed' : 'quotation';
     const lines = [{ product: 1, qty: i === 1 ? 6 : int(1, 12), price: PRODUCTS[0].price }];
     if (rand() < 0.6) lines.push({ product: int(2, 5), qty: int(1, 3), price: 0 });
     for (const l of lines) l.price = PRODUCTS[l.product - 1].price;
     subs.push({ id: i, customer, plan, status, lines });
   }
-  await insertMany(client, 'subscriptions', ['id', 'subscription_number', 'customer_id', 'plan_id', 'status', 'start_date'],
-    ['uuid', 'text', 'uuid', 'uuid', 'text', 'date'],
-    subs.map((s) => [SUB(s.id), `SUB-${String(s.id).padStart(5, '0')}`, s.customer, PLAN(s.plan.id), s.status, addDays(today, -200)]));
+  await insertMany(client, 'subscriptions', ['id', 'subscription_number', 'customer_id', 'plan_id', 'status', 'start_date', 'billing_frequency', 'next_billing_date'],
+    ['uuid', 'text', 'uuid', 'uuid', 'text', 'date', 'text', 'date'],
+    subs.map((s) => [SUB(s.id), `SUB-${String(s.id).padStart(5, '0')}`, s.customer, PLAN(s.plan.id), s.status, addDays(today, -200), s.plan.period,
+      s.status === 'active' ? addDays(today, s.id === 1 ? 0 : 1 + (s.id % 28)) : null]));
   await insertMany(client, 'subscription_items', ['subscription_id', 'product_id', 'quantity', 'unit_price'],
     ['uuid', 'uuid', 'int', 'numeric'],
     subs.flatMap((s) => s.lines.map((l) => [SUB(s.id), PRODUCT(l.product), l.qty, centsToSql(l.price)])));
@@ -142,7 +143,7 @@ async function main() {
   };
 
   for (const s of subs) {
-    if (s.status === 'Quotation') continue;
+    if (s.status === 'quotation') continue;
     const plan = scripted[s.id] ?? Array.from({ length: monthsBack }, (_, m) => {
       const daysAgo = m * 30 + int(0, 10);
       const r = rand();
@@ -158,14 +159,14 @@ async function main() {
       const discount = s.id === 1 && daysAgo === 150 ? Math.round(s.lines[0].qty * s.lines[0].price * 0.1) : 0;
       const tax = Math.round((subtotal - discount) * TAX_RATE);
       const total = subtotal - discount + tax;
-      const status = outcome === 'paid' ? 'Paid' : outcome === 'cancelled' ? 'Cancelled' : outcome === 'draft' ? 'Draft' : 'Confirmed';
+      const status = outcome === 'paid' ? 'paid' : outcome === 'cancelled' ? 'cancelled' : outcome === 'draft' ? 'draft' : 'confirmed';
       invoices.push([INV(invId), `INV-${String(invId).padStart(6, '0')}`, s.customer, SUB(s.id), status, invoiceDate, dueDate,
-        centsToSql(subtotal), centsToSql(discount), centsToSql(tax), centsToSql(total)]);
+        centsToSql(subtotal), centsToSql(discount), centsToSql(tax), centsToSql(total), invoiceDate, addDays(invoiceDate, 29)]);
       s.lines.forEach((l, idx) => {
         const lineSub = l.qty * l.price;
         const lineDisc = idx === 0 ? discount : 0;
         const lineTax = Math.round((lineSub - lineDisc) * TAX_RATE);
-        invLines.push([INV(invId), PRODUCT(l.product), l.qty, centsToSql(l.price), centsToSql(lineTax), centsToSql(lineSub - lineDisc + lineTax)]);
+        invLines.push([INV(invId), PRODUCT(l.product), PRODUCTS[l.product - 1].name, l.qty, centsToSql(l.price), centsToSql(lineTax), centsToSql(lineSub - lineDisc + lineTax)]);
       });
 
       const payDate = () => {
@@ -187,11 +188,11 @@ async function main() {
   }
 
   await insertMany(client, 'invoices',
-    ['id', 'invoice_number', 'customer_id', 'subscription_id', 'status', 'invoice_date', 'due_date', 'subtotal', 'discount_amount', 'tax_amount', 'total_amount'],
-    ['uuid', 'text', 'uuid', 'uuid', 'text', 'date', 'date', 'numeric', 'numeric', 'numeric', 'numeric'], invoices);
+    ['id', 'invoice_number', 'customer_id', 'subscription_id', 'status', 'invoice_date', 'due_date', 'subtotal', 'discount_amount', 'tax_amount', 'total_amount', 'billing_period_start', 'billing_period_end'],
+    ['uuid', 'text', 'uuid', 'uuid', 'text', 'date', 'date', 'numeric', 'numeric', 'numeric', 'numeric', 'date', 'date'], invoices);
   await insertMany(client, 'invoice_items',
-    ['invoice_id', 'product_id', 'quantity', 'unit_price', 'tax_amount', 'line_total'],
-    ['uuid', 'uuid', 'int', 'numeric', 'numeric', 'numeric'], invLines);
+    ['invoice_id', 'product_id', 'description', 'quantity', 'unit_price', 'tax_amount', 'line_total'],
+    ['uuid', 'uuid', 'text', 'int', 'numeric', 'numeric', 'numeric'], invLines);
   await insertMany(client, 'payments',
     ['invoice_id', 'customer_id', 'method', 'amount', 'payment_date', 'recorded_by'],
     ['uuid', 'uuid', 'text', 'numeric', 'date', 'uuid'], payments);

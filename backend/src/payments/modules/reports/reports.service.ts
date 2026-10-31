@@ -66,7 +66,7 @@ const OPEN_INVOICES = `
     LEFT JOIN LATERAL (
       SELECT SUM(p.amount) AS paid FROM payments p WHERE p.invoice_id = i.id AND p.status = 'POSTED'
     ) pp ON true
-   WHERE i.status = 'Confirmed'`;
+   WHERE i.status = 'confirmed'`;
 
 const BUCKET_SQL = `CASE
   WHEN days_overdue <= 0 THEN 'CURRENT'
@@ -78,7 +78,7 @@ const BUCKET_SQL = `CASE
 export const OVERDUE_BUCKETS = ['1-30', '31-60', '61-90', '90+'] as const;
 
 // MRR: normalise each ACTIVE subscription's line total to one month.
-const MONTH_FACTOR = `CASE upper(pl.billing_period::text)
+const MONTH_FACTOR = `CASE upper(pl.frequency::text)
   WHEN 'DAILY' THEN 365.0/12 WHEN 'WEEKLY' THEN 52.0/12 WHEN 'YEARLY' THEN 1.0/12 ELSE 1 END`;
 
 export async function summary(f: ReportFilters) {
@@ -92,13 +92,13 @@ export async function summary(f: ReportFilters) {
          FROM subscriptions s
          JOIN plans pl ON pl.id = s.plan_id
          LEFT JOIN LATERAL (SELECT SUM(l.quantity * l.unit_price) AS line_total FROM subscription_items l WHERE l.subscription_id = s.id) lt ON true
-        WHERE s.status = 'Active' ${sub.and}`,
+        WHERE s.status = 'active' ${sub.and}`,
       sub.params,
     ),
     queryOne(
       `SELECT COALESCE(SUM(i.total_amount), 0) AS invoiced, COALESCE(SUM(i.discount_amount), 0) AS discounts, count(*)::int AS n
          FROM invoices i
-        WHERE i.status IN ('Confirmed','Paid') AND i.invoice_date BETWEEN $1 AND $2 ${inv.and}`,
+        WHERE i.status IN ('confirmed','paid') AND i.invoice_date BETWEEN $1 AND $2 ${inv.and}`,
       inv.params,
     ),
     queryOne(
@@ -142,7 +142,7 @@ export async function revenueTrend(f: ReportFilters, granularity: string) {
      invoiced AS (
        SELECT date_trunc('${g}', i.invoice_date)::date AS bucket, SUM(i.total_amount) AS amount
          FROM invoices i
-        WHERE i.status IN ('Confirmed','Paid') AND i.invoice_date BETWEEN $1 AND $2 ${inv.and}
+        WHERE i.status IN ('confirmed','paid') AND i.invoice_date BETWEEN $1 AND $2 ${inv.and}
         GROUP BY 1
      ),
      collected AS (
@@ -167,7 +167,7 @@ export async function revenueByPlan(f: ReportFilters) {
     `WITH invoiced AS (
        SELECT s.plan_id, SUM(i.total_amount) AS amount, count(*)::int AS n
          FROM invoices i JOIN subscriptions s ON s.id = i.subscription_id
-        WHERE i.status IN ('Confirmed','Paid') AND i.invoice_date BETWEEN $1 AND $2 ${inv.and}
+        WHERE i.status IN ('confirmed','paid') AND i.invoice_date BETWEEN $1 AND $2 ${inv.and}
         GROUP BY s.plan_id
      ),
      collected AS (
@@ -176,7 +176,7 @@ export async function revenueByPlan(f: ReportFilters) {
         WHERE p.status = 'POSTED' AND p.payment_date BETWEEN $1 AND $2 ${inv.and}
         GROUP BY s.plan_id
      )
-     SELECT pl.id, pl.name, pl.billing_period, COALESCE(iv.amount, 0) AS invoiced, COALESCE(iv.n, 0) AS invoice_count,
+     SELECT pl.id, pl.name, pl.frequency, COALESCE(iv.amount, 0) AS invoiced, COALESCE(iv.n, 0) AS invoice_count,
             COALESCE(c.amount, 0) AS collected
        FROM plans pl
        LEFT JOIN invoiced iv ON iv.plan_id = pl.id
@@ -188,7 +188,7 @@ export async function revenueByPlan(f: ReportFilters) {
   return rows.map((r) => ({
     planId: r.id,
     planName: r.name,
-    billingPeriod: r.billing_period,
+    billingPeriod: r.frequency,
     invoiced: money(r.invoiced),
     invoiceCount: r.invoice_count,
     collected: money(r.collected),

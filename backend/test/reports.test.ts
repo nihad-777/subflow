@@ -15,8 +15,8 @@ describe('overdue and reports', () => {
     await makeInvoice({ customer: w.customer, sub: w.sub, total: 200, dueDaysAgo: 45 }); // 31-60
     await makeInvoice({ customer: w.customer, sub: w.sub, total: 300, dueDaysAgo: 120, invoiceDaysAgo: 135 }); // 90+
     await makeInvoice({ customer: w.customer, sub: w.sub, total: 400, dueDaysAgo: -3 }); // not due yet
-    await makeInvoice({ customer: w.customer, sub: w.sub, total: 500, dueDaysAgo: 10, status: 'Paid' });
-    await makeInvoice({ customer: w.customer, sub: w.sub, total: 600, dueDaysAgo: 10, status: 'Draft' });
+    await makeInvoice({ customer: w.customer, sub: w.sub, total: 500, dueDaysAgo: 10, status: 'paid' });
+    await makeInvoice({ customer: w.customer, sub: w.sub, total: 600, dueDaysAgo: 10, status: 'draft' });
     const partial = await makeInvoice({ customer: w.customer, sub: w.sub, total: 1000, dueDaysAgo: 70 }); // 61-90
     await as(w.staff).post('/payments', { invoiceId: partial, amount: 250, method: 'CARD', idempotencyKey: 'rep-test-1' });
 

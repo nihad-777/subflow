@@ -23,11 +23,11 @@ describe('recording payments', () => {
     const inv = await makeInvoice({ customer: w.customer, total: 1180 });
     const r1 = await pay(w.staff, inv, 500);
     expect(r1.status).toBe(201);
-    expect(r1.body.invoice).toMatchObject({ amountPaid: 500, outstanding: 680, status: 'Confirmed', isPartiallyPaid: true });
+    expect(r1.body.invoice).toMatchObject({ amountPaid: 500, outstanding: 680, status: 'confirmed', isPartiallyPaid: true });
 
     const r2 = await pay(w.staff, inv, '680.00');
     expect(r2.status).toBe(201);
-    expect(r2.body.invoice).toMatchObject({ amountPaid: 1180, outstanding: 0, status: 'Paid' });
+    expect(r2.body.invoice).toMatchObject({ amountPaid: 1180, outstanding: 0, status: 'paid' });
   });
 
   it('rejects overpayment with the outstanding amount', async () => {
@@ -50,7 +50,7 @@ describe('recording payments', () => {
   });
 
   it('refuses Draft, Paid and Cancelled invoices with 409', async () => {
-    for (const status of ['Draft', 'Paid', 'Cancelled']) {
+    for (const status of ['draft', 'paid', 'cancelled']) {
       const inv = await makeInvoice({ customer: w.customer, total: 100, status });
       const r = await pay(w.staff, inv, 10);
       expect(r.status).toBe(409);
@@ -82,7 +82,7 @@ describe('recording payments', () => {
     expect(results.map((r) => r.status).sort()).toEqual([200, 200, 200, 200, 201]);
     const { rows } = await pool.query('SELECT count(*)::int AS n FROM payments WHERE invoice_id = $1', [inv]);
     expect(rows[0].n).toBe(1);
-    expect(await invoiceStatus(inv)).toBe('Paid');
+    expect(await invoiceStatus(inv)).toBe('paid');
   });
 
   it('two staff paying the full amount at once: row lock lets only one through', async () => {
@@ -100,12 +100,12 @@ describe('voiding', () => {
   it('voids, reopens a Paid invoice, and keeps the row', async () => {
     const inv = await makeInvoice({ customer: w.customer, total: 100, dueDaysAgo: 3 });
     const p = await pay(w.staff, inv, 100);
-    expect(await invoiceStatus(inv)).toBe('Paid');
+    expect(await invoiceStatus(inv)).toBe('paid');
 
     const v = await as(w.admin).post(`/payments/${p.body.payment.id}/void`, { reason: 'Cheque bounced' });
     expect(v.status).toBe(200);
     expect(v.body.payment).toMatchObject({ status: 'VOIDED', voidReason: 'Cheque bounced' });
-    expect(v.body.invoice).toMatchObject({ status: 'Confirmed', outstanding: 100, isOverdue: true, daysOverdue: 3 });
+    expect(v.body.invoice).toMatchObject({ status: 'confirmed', outstanding: 100, isOverdue: true, daysOverdue: 3 });
 
     expect((await as(w.admin).post(`/payments/${p.body.payment.id}/void`, { reason: 'again' })).status).toBe(409);
   });

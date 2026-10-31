@@ -32,8 +32,8 @@ export async function invoiceBalance(invoiceId: string, db: Db = pool) {
   if (!row) return null;
   const totalC = toCents(row.total_amount);
   const paidC = toCents(row.paid);
-  const outstandingC = row.status === 'Cancelled' ? 0 : Math.max(0, totalC - paidC);
-  const isOverdue = row.status === 'Confirmed' && row.days_past_due > 0 && outstandingC > 0;
+  const outstandingC = row.status === 'cancelled' ? 0 : Math.max(0, totalC - paidC);
+  const isOverdue = row.status === 'confirmed' && row.days_past_due > 0 && outstandingC > 0;
   return {
     invoiceId: row.id as string,
     number: row.invoice_number as string,
@@ -145,7 +145,7 @@ export async function recordPayment(body: unknown, user: AuthUser) {
     const late = await replay(tx);
     if (late) return late;
 
-    if (invoice.status !== 'Confirmed') {
+    if (invoice.status !== 'confirmed') {
       const why: Record<string, string> = {
         Draft: 'Invoice is still a draft; confirm it before taking payment',
         Paid: 'Invoice is already fully paid',
@@ -177,7 +177,7 @@ export async function recordPayment(body: unknown, user: AuthUser) {
       throw conflict('IDEMPOTENCY_KEY_REUSED', 'This idempotency key was already used');
     }
 
-    if (input.amount === outstanding) await setInvoiceStatus(tx, invoice.id, 'Paid');
+    if (input.amount === outstanding) await setInvoiceStatus(tx, invoice.id, 'paid');
 
     return { replayed: false, payment: (await findPayment(inserted.id, tx))!, invoice: (await invoiceBalance(invoice.id, tx))! };
   });
@@ -206,7 +206,7 @@ export async function voidPayment(paymentId: number, body: unknown, user: AuthUs
       [paymentId, reason, user.id],
     );
     const outstanding = toCents(invoice.total) - toCents(await amountPaid(invoice.id, tx));
-    if (invoice.status === 'Paid' && outstanding > 0) await setInvoiceStatus(tx, invoice.id, 'Confirmed');
+    if (invoice.status === 'paid' && outstanding > 0) await setInvoiceStatus(tx, invoice.id, 'confirmed');
 
     return { payment: (await findPayment(paymentId, tx))!, invoice: (await invoiceBalance(invoice.id, tx))! };
   });
@@ -282,7 +282,7 @@ export async function payableInvoices(q: string | undefined, limit = 20) {
        FROM invoices i
        JOIN profiles c ON c.id = i.customer_id
        LEFT JOIN LATERAL (SELECT SUM(amount) AS paid FROM payments p WHERE p.invoice_id = i.id AND p.status = 'POSTED') pp ON true
-      WHERE i.status = 'Confirmed' ${filter}
+      WHERE i.status = 'confirmed' ${filter}
       ORDER BY i.due_date ASC, i.id ASC
       LIMIT ${limit}`,
     params,

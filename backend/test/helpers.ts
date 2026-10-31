@@ -35,9 +35,9 @@ export async function makeWorld() {
   const otherCustomer = await makeUser('customer', 'Cust Two');
   const product = (await queryOne(`INSERT INTO products (name, price) VALUES ('Seat', 100) RETURNING id`))!.id as string;
   const product2 = (await queryOne(`INSERT INTO products (name, price) VALUES ('Storage', 50) RETURNING id`))!.id as string;
-  const plan = (await queryOne(`INSERT INTO plans (name, price, billing_period) VALUES ('Monthly', 100, 'Monthly') RETURNING id`))!.id as string;
+  const plan = (await queryOne(`INSERT INTO plans (name, price, frequency) VALUES ('Monthly', 100, 'monthly') RETURNING id`))!.id as string;
   const sub = (await queryOne(
-    `INSERT INTO subscriptions (subscription_number, customer_id, plan_id, status, start_date) VALUES ('SUB-1', $1, $2, 'Active', $3) RETURNING id`,
+    `INSERT INTO subscriptions (subscription_number, customer_id, plan_id, status, start_date, billing_frequency) VALUES ('SUB-1', $1, $2, 'active', $3, 'monthly') RETURNING id`,
     [customer, plan, addDays(todayStr(), -100)],
   ))!.id as string;
   await pool.query(`INSERT INTO subscription_items (subscription_id, product_id, quantity, unit_price) VALUES ($1,$2,6,100)`, [sub, product]);
@@ -51,9 +51,9 @@ export async function makeInvoice(opts: { customer: string; sub?: string; total:
   const invoiceDate = addDays(todayStr(), -(opts.invoiceDaysAgo ?? 10));
   const dueDate = addDays(todayStr(), -(opts.dueDaysAgo ?? -5));
   const row = await queryOne(
-    `INSERT INTO invoices (invoice_number, customer_id, subscription_id, status, invoice_date, due_date, subtotal, total_amount)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$7) RETURNING id`,
-    [`INV-T${invoiceSeq}-${Date.now()}`, opts.customer, opts.sub ?? null, opts.status ?? 'Confirmed', invoiceDate, dueDate, opts.total],
+    `INSERT INTO invoices (invoice_number, customer_id, subscription_id, status, invoice_date, due_date, subtotal, total_amount, billing_period_start, billing_period_end)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$7,$8,$8) RETURNING id`,
+    [`INV-T${invoiceSeq}-${Date.now()}`, opts.customer, opts.sub ?? null, opts.status ?? 'confirmed', invoiceDate, dueDate, opts.total, addDays('2000-01-01', invoiceSeq)],
   );
   return row!.id as string;
 }

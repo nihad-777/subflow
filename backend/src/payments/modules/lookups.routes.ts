@@ -15,7 +15,7 @@ lookupsRouter.get('/products', asyncHandler(async (req, res) => {
 }));
 
 lookupsRouter.get('/plans', asyncHandler(async (_req, res) => {
-  res.json(await query('SELECT id, name, billing_period AS "billingPeriod" FROM plans ORDER BY name'));
+  res.json(await query('SELECT id, name, frequency AS "billingPeriod" FROM plans ORDER BY name'));
 }));
 
 lookupsRouter.get('/customers', asyncHandler(async (req, res) => {

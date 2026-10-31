@@ -10,7 +10,7 @@
     "payments:db": "tsx scripts/payments-db.ts",
     "payments:db:reset": "tsx scripts/payments-db.ts --reset",
     "payments:seed": "tsx src/payments/seed.ts",
-    "payments:seed:large": "SEED_SCALE=large tsx src/payments/seed.ts",
+    "payments:seed:large": "tsx src/payments/seed.ts --large",
     "test": "vitest run"
   },
   "dependencies": {

@@ -4,7 +4,7 @@
 import { queryOne, type Db, type Tx } from '../lib/db.js';
 
 // Status strings follow Member 3's invoice lifecycle (database/subscriptions_billing.md).
-export type InvoiceStatus = 'Draft' | 'Confirmed' | 'Paid' | 'Cancelled';
+export type InvoiceStatus = 'draft' | 'confirmed' | 'paid' | 'cancelled';
 
 export interface LockedInvoice {
   id: string;
