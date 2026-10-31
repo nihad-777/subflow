@@ -1,20 +1,20 @@
 # Subflow
 
-Authentication and role-based application foundation for the Subflow team project.
+Subflow team application with authentication, role-based workspaces, and product management.
 
 ## Stack
 
-- React + TypeScript + Vite frontend (`frontend/`)
+- React + Vite frontend (`client/`)
 - Node.js + Express API (`backend/`)
 - Supabase Auth and Postgres
 
 ## Local setup
 
-1. Create a Supabase project and run `database/schema.sql` in its SQL Editor.
-2. Copy `frontend/.env.example` to `frontend/.env` and set the project URL and anon key.
+1. Coordinate Supabase project setup and run `database/schema.sql` in its SQL Editor.
+2. Copy `client/.env.example` to `client/.env` and set the project URL and publishable key.
 3. Copy `backend/.env.example` to `backend/.env`. Set the project URL, anon key, and service role key there. Keep the service role key private and server-side.
-4. Bootstrap your first administrator by registering the admin account, then uncomment the one-time example at the bottom of `database/schema.sql` and replace the email. Only do this for the trusted project owner account.
-5. Install and run the frontend from `frontend/` with `npm install` then `npm run dev`.
+4. Register the first trusted account, then set its role to `admin` in the SQL Editor with `update public.profiles set role = 'admin' where email = 'you@example.com';`.
+5. Install and run the frontend from `client/` with `npm install` then `npm run dev`.
 6. Install and run the API from `backend/` with `npm install` then `npm run dev`.
 
 Set the Supabase Auth site URL to `http://localhost:5173` during local development. Add `http://localhost:5173/update-password` to the allowed redirect URLs so password reset links return to the app.
