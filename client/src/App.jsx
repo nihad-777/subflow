@@ -17,11 +17,15 @@ const empty = {
     productIds: [],
     startsAt: '',
     endsAt: '',
+    autoClose: false,
+    allowPause: true,
+    allowEarlyClose: true,
+    allowRenew: true,
   },
   Quotations: {
     name: '',
     validityDays: 30,
-    lineItems: '[]',
+    lineItems: [],
   },
 };
 
@@ -48,9 +52,8 @@ export default function App() {
   function openForm(item) {
     const nextForm = item ? { ...item } : structuredClone(empty[page]);
 
-    // The quotation editor uses a text box, so convert saved items to JSON text.
     if (page === 'Quotations' && item) {
-      nextForm.lineItems = JSON.stringify(item.lineItems || [], null, 2);
+      nextForm.lineItems = (item.lineItems || []).map((line) => ({ ...line }));
     }
 
     setForm(nextForm);
@@ -59,23 +62,11 @@ export default function App() {
 
   function save(event) {
     event.preventDefault();
-
     const savedForm = { ...form, id: editingId ?? Date.now() };
-
-    if (page === 'Quotations') {
-      try {
-        savedForm.lineItems = JSON.parse(form.lineItems || '[]');
-      } catch {
-        alert('Line items must be valid JSON.');
-        return;
-      }
-    }
 
     setRows((current) =>
       editingId
-        ? current.map((item) =>
-            item.id === editingId ? savedForm : item
-          )
+        ? current.map((item) => (item.id === editingId ? savedForm : item))
         : [...current, savedForm]
     );
 
@@ -93,6 +84,15 @@ export default function App() {
       ...form,
       variants: form.variants.map((variant, i) =>
         i === index ? { ...variant, [key]: value } : variant
+      ),
+    });
+  }
+
+  function changeLineItem(index, key, value) {
+    setForm({
+      ...form,
+      lineItems: form.lineItems.map((line, i) =>
+        i === index ? { ...line, [key]: value } : line
       ),
     });
   }
@@ -355,7 +355,11 @@ export default function App() {
                       }
                     />
                     <span className="col-span-2 text-xs text-slate-500">
-                      Variant price: {money(Number(form.price || 0) + Number(variant.priceAdjustment || 0))}
+                      Variant price:{' '}
+                      {money(
+                        Number(form.price || 0) +
+                          Number(variant.priceAdjustment || 0)
+                      )}
                     </span>
                   </div>
                 ))}
@@ -464,6 +468,29 @@ export default function App() {
                     Add a product before creating a plan.
                   </p>
                 )}
+
+                <div className="space-y-2 border-t pt-3">
+                  {[
+                    ['autoClose', 'Close automatically when the plan ends'],
+                    ['allowPause', 'Allow pausing'],
+                    ['allowEarlyClose', 'Allow early closure'],
+                    ['allowRenew', 'Allow renewal'],
+                  ].map(([key, label]) => (
+                    <label
+                      key={key}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      {label}
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form[key])}
+                        onChange={(e) =>
+                          setForm({ ...form, [key]: e.target.checked })
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
               </>
             )}
 
@@ -482,17 +509,71 @@ export default function App() {
                   />
                 </label>
 
-                <label className="block text-sm">
-                  Default line items (JSON)
-                  <textarea
-                    rows="5"
-                    className="mt-1 w-full rounded border p-2 font-mono text-xs"
-                    value={form.lineItems}
-                    onChange={(e) =>
-                      setForm({ ...form, lineItems: e.target.value })
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <span>Quotation line items</span>
+                  <button
+                    type="button"
+                    className="text-violet-700"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        lineItems: [
+                          ...form.lineItems,
+                          { description: '', quantity: 1, unitPrice: '' },
+                        ],
+                      })
                     }
-                  />
-                </label>
+                  >
+                    + Add line
+                  </button>
+                </div>
+
+                {form.lineItems.map((line, index) => (
+                  <div key={index} className="grid grid-cols-3 gap-2">
+                    <input
+                      placeholder="Description"
+                      className="rounded border p-2"
+                      value={line.description}
+                      onChange={(e) =>
+                        changeLineItem(index, 'description', e.target.value)
+                      }
+                    />
+                    <input
+                      aria-label="Quantity"
+                      type="number"
+                      min="1"
+                      className="rounded border p-2"
+                      value={line.quantity}
+                      onChange={(e) =>
+                        changeLineItem(index, 'quantity', e.target.value)
+                      }
+                    />
+                    <input
+                      aria-label="Unit price"
+                      type="number"
+                      min="0"
+                      step=".01"
+                      placeholder="Unit price"
+                      className="rounded border p-2"
+                      value={line.unitPrice}
+                      onChange={(e) =>
+                        changeLineItem(index, 'unitPrice', e.target.value)
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="text-left text-xs text-red-600"
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          lineItems: form.lineItems.filter((_, i) => i !== index),
+                        })
+                      }
+                    >
+                      Remove line
+                    </button>
+                  </div>
+                ))}
               </>
             )}
 
