@@ -7,6 +7,7 @@ import { paymentRouter, meRouter } from './modules/payments/payment.routes.js';
 import { invoicePaymentsRouter } from './modules/payments/invoice-balance.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
 import { lookupsRouter } from './modules/lookups.routes.js';
+import { billingRouter } from '../billing/index.js';
 
 // Response time header: the dashboard shows it to prove the < 2 s target.
 function responseTime(_req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -35,6 +36,7 @@ export function paymentsAnalyticsRouter() {
   r.use('/reports', reportsRouter);
   r.use('/me', meRouter);
   r.use('/lookups', lookupsRouter);
+  r.use(billingRouter());
   // Own error handler: server.js's global one would turn HttpErrors into 500s.
   r.use(errorHandler);
   return r;

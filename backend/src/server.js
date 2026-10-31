@@ -4,6 +4,7 @@ import express from 'express'
 import helmet from 'helmet'
 import { createClient } from '@supabase/supabase-js'
 import { paymentsAnalyticsRouter } from './payments/index.ts'
+import { startBillingSchedule } from './billing/index.ts'
 
 const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']
 for (const key of required) {
@@ -91,4 +92,5 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Unexpected server error.' })
 })
 
+startBillingSchedule()
 app.listen(port, () => console.log(`Subflow API listening on port ${port}`))
