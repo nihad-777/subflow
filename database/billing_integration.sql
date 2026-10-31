@@ -5,14 +5,20 @@
 
 -- Links Member 3's tables to the real customers, plans and products.
 alter table public.subscriptions
+  drop constraint if exists subscriptions_customer_fk,
+  drop constraint if exists subscriptions_plan_fk,
   add constraint subscriptions_customer_fk foreign key (customer_id) references public.profiles(id),
   add constraint subscriptions_plan_fk foreign key (plan_id) references public.plans(id);
 alter table public.subscription_items
+  drop constraint if exists subscription_items_product_fk,
+  drop constraint if exists subscription_items_variant_fk,
   add constraint subscription_items_product_fk foreign key (product_id) references public.products(id),
   add constraint subscription_items_variant_fk foreign key (product_variant_id) references public.product_variants(id);
 alter table public.invoices
+  drop constraint if exists invoices_customer_fk,
   add constraint invoices_customer_fk foreign key (customer_id) references public.profiles(id);
 alter table public.invoice_items
+  drop constraint if exists invoice_items_product_fk,
   add constraint invoice_items_product_fk foreign key (product_id) references public.products(id);
 
 -- Fields the brief needs that the first version of the tables did not have.
