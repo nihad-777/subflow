@@ -31,6 +31,7 @@ begin
   if (new.role is distinct from old.role
       or new.email is distinct from old.email
       or new.created_at is distinct from old.created_at)
+     and current_user not in ('postgres', 'service_role')
      and coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
     raise exception 'Protected profile fields can only be changed by a trusted administrator';
   end if;
