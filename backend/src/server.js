@@ -3,6 +3,8 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import { createClient } from '@supabase/supabase-js'
+import { paymentsAnalyticsRouter } from './payments/index.ts'
+import { startBillingSchedule } from './billing/index.ts'
 
 const required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']
 for (const key of required) {
@@ -17,7 +19,7 @@ const serviceClient = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROL
 })
 
 app.use(helmet())
-app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173' }))
+app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173', exposedHeaders: ['X-Response-Time'] }))
 app.use(express.json({ limit: '32kb' }))
 
 function getUserClient(token) {
@@ -49,6 +51,7 @@ async function requireAdmin(req, res, next) {
 }
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
+app.use('/api/finance', paymentsAnalyticsRouter())
 
 app.get('/api/profile', requireUser, async (req, res) => {
   const { data, error } = await req.supabase.from('profiles').select('*').eq('id', req.user.id).single()
@@ -89,4 +92,5 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Unexpected server error.' })
 })
 
+startBillingSchedule()
 app.listen(port, () => console.log(`Subflow API listening on port ${port}`))
