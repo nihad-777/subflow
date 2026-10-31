@@ -1,63 +1,65 @@
 import { useState } from 'react';
 
-const emptyProduct = {
-  name: '',
-  type: 'Software',
-  price: '',
-  cost: '',
-  variants: [],
+const empty = {
+  Products: { name: '', type: 'Software', price: '', cost: '', variants: [] },
+  Plans: {
+    name: '', price: '', frequency: 'monthly', minQuantity: 1, productIds: [],
+  },
+  Quotations: { name: '', validityDays: 30, lineItems: '[]' },
 };
 
+const money = (value) => `$${Number(value || 0).toFixed(2)}`;
+
 export default function App() {
+  const [page, setPage] = useState('Products');
   const [products, setProducts] = useState([]);
-  const [form, setForm] = useState(emptyProduct);
+  const [plans, setPlans] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [form, setForm] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [showForm, setShowForm] = useState(false);
 
-  function openNewForm() {
-    setForm(emptyProduct);
-    setEditingId(null);
-    setShowForm(true);
+  const rows = page === 'Products' ? products : page === 'Plans' ? plans : quotes;
+  const setRows = page === 'Products' ? setProducts : page === 'Plans' ? setPlans : setQuotes;
+
+  function openForm(item) {
+    setForm(item ? { ...item } : structuredClone(empty[page]));
+    setEditingId(item?.id ?? null);
   }
 
-  function editProduct(product) {
-    setForm(product);
-    setEditingId(product.id);
-    setShowForm(true);
-  }
-
-  function saveProduct(event) {
+  function save(event) {
     event.preventDefault();
 
-    if (editingId) {
-      setProducts(products.map((product) =>
-        product.id === editingId ? { ...form, id: editingId } : product
-      ));
-    } else {
-      setProducts([...products, { ...form, id: Date.now() }]);
+    let savedForm = { ...form, id: editingId ?? Date.now() };
+    if (page === 'Quotations') {
+      try {
+        savedForm.lineItems = JSON.parse(form.lineItems || '[]');
+      } catch {
+        alert('Line items must be valid JSON.');
+        return;
+      }
     }
 
-    setShowForm(false);
+    setRows((current) =>
+      editingId
+        ? current.map((item) => item.id === editingId ? savedForm : item)
+        : [...current, savedForm]
+    );
+    setForm(null);
   }
 
-  function addVariant() {
-    setForm({
-      ...form,
-      variants: [...form.variants, { name: '', priceAdjustment: '' }],
-    });
+  function deleteRow(id) {
+    if (confirm('Delete this item?')) {
+      setRows((current) => current.filter((item) => item.id !== id));
+    }
   }
 
-  function updateVariant(index, key, value) {
+  function changeVariant(index, key, value) {
     setForm({
       ...form,
       variants: form.variants.map((variant, i) =>
         i === index ? { ...variant, [key]: value } : variant
       ),
     });
-  }
-
-  function deleteProduct(id) {
-    setProducts(products.filter((product) => product.id !== id));
   }
 
   return (
@@ -68,173 +70,168 @@ export default function App() {
       </header>
 
       <section className="mx-auto max-w-6xl p-8">
+        <nav className="mb-8 flex gap-3">
+          {['Products', 'Plans', 'Quotations'].map((name) => (
+            <button
+              key={name}
+              onClick={() => setPage(name)}
+              className={`rounded-lg px-4 py-2 ${page === name ? 'bg-violet-600 text-white' : 'bg-white text-slate-700'}`}
+            >
+              {name}
+            </button>
+          ))}
+        </nav>
+
         <div className="mb-6 flex items-center justify-between">
           <div>
             <p className="text-sm text-slate-500">PRODUCT CATALOG</p>
-            <h2 className="mt-1 text-3xl font-bold">Products</h2>
-            <p className="mt-2 text-slate-500">
-              Manage products, pricing, and product variants.
-            </p>
+            <h2 className="mt-1 text-3xl font-bold">
+              {page === 'Quotations' ? 'Quotation templates' : page}
+            </h2>
           </div>
-
-          <button
-            onClick={openNewForm}
-            className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700"
-          >
-            + Add product
+          <button onClick={() => openForm()} className="rounded-lg bg-violet-600 px-4 py-2 text-white">
+            + Add {page === 'Products' ? 'product' : page === 'Plans' ? 'plan' : 'template'}
           </button>
         </div>
 
-        <div className="overflow-hidden rounded-xl border bg-white">
+        <div className="overflow-x-auto rounded-xl border bg-white">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-100 text-slate-500">
               <tr>
-                <th className="p-4">Product</th>
-                <th className="p-4">Type</th>
-                <th className="p-4">Sales price</th>
-                <th className="p-4">Variants</th>
+                <th className="p-4">Name</th>
+                <th className="p-4">{page === 'Products' ? 'Type' : page === 'Plans' ? 'Billing' : 'Valid for'}</th>
+                <th className="p-4">{page === 'Quotations' ? 'Line items' : 'Price'}</th>
                 <th className="p-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
-                <tr key={product.id} className="border-t">
-                  <td className="p-4 font-medium">{product.name}</td>
-                  <td className="p-4">{product.type}</td>
-                  <td className="p-4">${Number(product.price || 0).toFixed(2)}</td>
-                  <td className="p-4">{product.variants.length}</td>
+              {rows.map((item) => (
+                <tr key={item.id} className="border-t">
+                  <td className="p-4 font-medium">
+                    {item.name}
+                    {page === 'Products' && (
+                      <div className="text-xs text-slate-500">{item.variants.length} variants</div>
+                    )}
+                    {page === 'Plans' && (
+                      <div className="text-xs text-slate-500">
+                        {item.productIds.map((id) => products.find((p) => p.id === id)?.name).filter(Boolean).join(', ')}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    {page === 'Products' ? item.type : page === 'Plans' ? item.frequency : `${item.validityDays} days`}
+                  </td>
+                  <td className="p-4">
+                    {page === 'Quotations'
+                      ? `${item.lineItems.length} items`
+                      : money(page === 'Products' ? item.price : item.price)}
+                  </td>
                   <td className="space-x-3 p-4">
-                    <button
-                      onClick={() => editProduct(product)}
-                      className="text-violet-700 hover:underline"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteProduct(product.id)}
-                      className="text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    <button onClick={() => openForm(item)} className="text-violet-700">Edit</button>
+                    <button onClick={() => deleteRow(item.id)} className="text-red-600">Delete</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {products.length === 0 && (
-            <p className="p-10 text-center text-slate-500">
-              No products yet. Choose “Add product” to create one.
-            </p>
+          {rows.length === 0 && (
+            <p className="p-10 text-center text-slate-500">No {page.toLowerCase()} yet.</p>
           )}
         </div>
       </section>
 
-      {showForm && (
+      {form && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/40 p-4">
-          <form
-            onSubmit={saveProduct}
-            className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-xl bg-white p-6"
-          >
+          <form onSubmit={save} className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-xl bg-white p-6">
             <h3 className="text-xl font-bold">
-              {editingId ? 'Edit product' : 'Add product'}
+              {editingId ? 'Edit' : 'Add'} {page === 'Products' ? 'product' : page === 'Plans' ? 'plan' : 'quotation template'}
             </h3>
 
             <label className="block text-sm">
-              Product name
-              <input
-                required
-                className="mt-1 w-full rounded border p-2"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
+              Name
+              <input required className="mt-1 w-full rounded border p-2" value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </label>
 
-            <div className="grid grid-cols-2 gap-4">
-              <label className="block text-sm">
-                Type
-                <select
-                  className="mt-1 w-full rounded border p-2"
-                  value={form.type}
-                  onChange={(e) => setForm({ ...form, type: e.target.value })}
-                >
-                  <option>Software</option>
-                  <option>Service</option>
-                  <option>Other</option>
-                </select>
+            {page === 'Products' && <>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm">Type
+                  <select className="mt-1 w-full rounded border p-2" value={form.type}
+                    onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                    <option>Software</option><option>Service</option><option>Other</option>
+                  </select>
+                </label>
+                <label className="text-sm">Sales price
+                  <input type="number" min="0" step=".01" required className="mt-1 w-full rounded border p-2"
+                    value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                </label>
+              </div>
+              <label className="block text-sm">Cost price
+                <input type="number" min="0" step=".01" className="mt-1 w-full rounded border p-2"
+                  value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
               </label>
-
-              <label className="block text-sm">
-                Sales price
-                <input
-                  required
-                  min="0"
-                  step="0.01"
-                  type="number"
-                  className="mt-1 w-full rounded border p-2"
-                  value={form.price}
-                  onChange={(e) => setForm({ ...form, price: e.target.value })}
-                />
-              </label>
-            </div>
-
-            <label className="block text-sm">
-              Cost price
-              <input
-                min="0"
-                step="0.01"
-                type="number"
-                className="mt-1 w-full rounded border p-2"
-                value={form.cost}
-                onChange={(e) => setForm({ ...form, cost: e.target.value })}
-              />
-            </label>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <b className="text-sm">Variants</b>
-                <button
-                  type="button"
-                  onClick={addVariant}
-                  className="text-sm text-violet-700"
-                >
+              <div className="flex justify-between text-sm font-medium">
+                <span>Variants</span>
+                <button type="button" className="text-violet-700"
+                  onClick={() => setForm({ ...form, variants: [...form.variants, { name: '', priceAdjustment: '' }] })}>
                   + Add variant
                 </button>
               </div>
-
-              {form.variants.map((variant, index) => (
-                <div key={index} className="mb-2 grid grid-cols-2 gap-2">
-                  <input
-                    placeholder="Variant name"
-                    className="rounded border p-2 text-sm"
-                    value={variant.name}
-                    onChange={(e) => updateVariant(index, 'name', e.target.value)}
-                  />
-                  <input
-                    placeholder="Price adjustment"
-                    type="number"
-                    step="0.01"
-                    className="rounded border p-2 text-sm"
-                    value={variant.priceAdjustment}
-                    onChange={(e) =>
-                      updateVariant(index, 'priceAdjustment', e.target.value)
-                    }
-                  />
+              {form.variants.map((variant, i) => (
+                <div key={i} className="grid grid-cols-2 gap-2">
+                  <input placeholder="Variant name" className="rounded border p-2"
+                    value={variant.name} onChange={(e) => changeVariant(i, 'name', e.target.value)} />
+                  <input placeholder="Price adjustment" type="number" step=".01" className="rounded border p-2"
+                    value={variant.priceAdjustment} onChange={(e) => changeVariant(i, 'priceAdjustment', e.target.value)} />
                 </div>
               ))}
-            </div>
+            </>}
+
+            {page === 'Plans' && <>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="text-sm">Price
+                  <input required type="number" min="0" step=".01" className="mt-1 w-full rounded border p-2"
+                    value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                </label>
+                <label className="text-sm">Billing frequency
+                  <select className="mt-1 w-full rounded border p-2" value={form.frequency}
+                    onChange={(e) => setForm({ ...form, frequency: e.target.value })}>
+                    <option>daily</option><option>weekly</option><option>monthly</option><option>yearly</option>
+                  </select>
+                </label>
+              </div>
+              <label className="block text-sm">Minimum quantity
+                <input type="number" min="1" className="mt-1 w-full rounded border p-2"
+                  value={form.minQuantity} onChange={(e) => setForm({ ...form, minQuantity: e.target.value })} />
+              </label>
+              <div className="text-sm font-medium">Products included</div>
+              {products.map((product) => (
+                <label key={product.id} className="flex items-center gap-2 text-sm">
+                  <input type="checkbox" checked={form.productIds.includes(product.id)}
+                    onChange={(e) => setForm({ ...form, productIds: e.target.checked
+                      ? [...form.productIds, product.id]
+                      : form.productIds.filter((id) => id !== product.id) })} />
+                  {product.name}
+                </label>
+              ))}
+              {products.length === 0 && <p className="text-sm text-slate-500">Add a product before creating a plan.</p>}
+            </>}
+
+            {page === 'Quotations' && <>
+              <label className="block text-sm">Valid for (days)
+                <input type="number" min="1" className="mt-1 w-full rounded border p-2"
+                  value={form.validityDays} onChange={(e) => setForm({ ...form, validityDays: e.target.value })} />
+              </label>
+              <label className="block text-sm">Default line items (JSON)
+                <textarea rows="5" className="mt-1 w-full rounded border p-2 font-mono text-xs"
+                  value={form.lineItems} onChange={(e) => setForm({ ...form, lineItems: e.target.value })} />
+              </label>
+            </>}
 
             <div className="flex justify-end gap-3 border-t pt-4">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded border px-4 py-2"
-              >
-                Cancel
-              </button>
-              <button className="rounded bg-violet-600 px-4 py-2 text-white">
-                Save product
-              </button>
+              <button type="button" onClick={() => setForm(null)} className="rounded border px-4 py-2">Cancel</button>
+              <button className="rounded bg-violet-600 px-4 py-2 text-white">Save</button>
             </div>
           </form>
         </div>
