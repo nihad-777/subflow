@@ -1,4 +1,50 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '');
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const sessionKey = 'subflow-product-session';
+const demoKey = 'subflow-product-demo';
+const demoProducts = [
+  { id: 'demo-product-1', name: 'Subflow Starter', type: 'Software', description: 'Core tools for growing teams.', price: '29.00', cost: '8.00', variants: [{ name: 'Monthly', priceAdjustment: '0' }, { name: 'Annual', priceAdjustment: '-5' }] },
+  { id: 'demo-product-2', name: 'Onboarding', type: 'Service', description: 'Guided workspace setup.', price: '199.00', cost: '80.00', variants: [] },
+];
+const demoPlans = [{ id: 'demo-plan-1', name: 'Team monthly', price: '49.00', frequency: 'monthly', minQuantity: 1, productIds: ['demo-product-1'], startsAt: '', endsAt: '', autoClose: false, allowPause: true, allowEarlyClose: true, allowRenew: true }];
+const demoQuotes = [{ id: 'demo-quote-1', name: 'Standard proposal', validityDays: 30, lineItems: [{ description: 'Workspace setup', quantity: 1, unitPrice: '199.00' }] }];
+
+async function signIn(email, password) {
+  const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    method: 'POST', headers: { apikey: supabaseKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.msg || data.message || 'Sign in failed.');
+  return data;
+}
+
+async function refreshSession(session) {
+  if (!session?.refresh_token) return session;
+  const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST', headers: { apikey: supabaseKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
+  });
+  if (!response.ok) return null;
+  return response.json();
+}
+
+async function apiRequest(path, session, options = {}) {
+  let response = await fetch(`${apiUrl}${path}`, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}`, ...options.headers } });
+  if (response.status === 401) {
+    const updated = await refreshSession(session);
+    if (!updated) throw new Error('Your session expired. Please sign in again.');
+    session.save(updated);
+    response = await fetch(`${apiUrl}${path}`, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${updated.access_token}`, ...options.headers } });
+  }
+  if (response.status === 204) return null;
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || 'The request could not be completed.');
+  return data;
+}
 
 const empty = {
   Products: {
@@ -33,11 +79,67 @@ const money = (value) => `$${Number(value || 0).toFixed(2)}`;
 
 export default function App() {
   const [page, setPage] = useState('Products');
-  const [products, setProducts] = useState([]);
-  const [plans, setPlans] = useState([]);
-  const [quotes, setQuotes] = useState([]);
+  const [products, setProducts] = useState(() => JSON.parse(localStorage.getItem(demoKey) === 'true' ? localStorage.getItem('subflow-products') || '[]' : '[]'));
+  const [plans, setPlans] = useState(() => JSON.parse(localStorage.getItem(demoKey) === 'true' ? localStorage.getItem('subflow-plans') || '[]' : '[]'));
+  const [quotes, setQuotes] = useState(() => JSON.parse(localStorage.getItem(demoKey) === 'true' ? localStorage.getItem('subflow-quotes') || '[]' : '[]'));
   const [form, setForm] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [session, setSession] = useState(() => JSON.parse(localStorage.getItem(sessionKey) || 'null'));
+  const [demoMode, setDemoMode] = useState(() => localStorage.getItem(demoKey) === 'true');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  function updateSession(next) {
+    if (next) localStorage.setItem(sessionKey, JSON.stringify(next));
+    else localStorage.removeItem(sessionKey);
+    setSession(next);
+  }
+
+  function startPreview() {
+    localStorage.setItem(demoKey, 'true');
+    if (!localStorage.getItem('subflow-products')) localStorage.setItem('subflow-products', JSON.stringify(demoProducts));
+    if (!localStorage.getItem('subflow-plans')) localStorage.setItem('subflow-plans', JSON.stringify(demoPlans));
+    if (!localStorage.getItem('subflow-quotes')) localStorage.setItem('subflow-quotes', JSON.stringify(demoQuotes));
+    setProducts(JSON.parse(localStorage.getItem('subflow-products')));
+    setPlans(JSON.parse(localStorage.getItem('subflow-plans')));
+    setQuotes(JSON.parse(localStorage.getItem('subflow-quotes')));
+    setDemoMode(true);
+  }
+
+  function exitPreview() {
+    localStorage.removeItem(demoKey);
+    localStorage.removeItem('subflow-products');
+    localStorage.removeItem('subflow-plans');
+    localStorage.removeItem('subflow-quotes');
+    setDemoMode(false);
+    setProducts([]); setPlans([]); setQuotes([]);
+  }
+
+  useEffect(() => {
+    if (demoMode) return;
+    if (!session?.access_token) return;
+    let active = true;
+    const authenticatedSession = { ...session, save: updateSession };
+    Promise.all([
+      apiRequest('/api/catalog/products', authenticatedSession),
+      apiRequest('/api/catalog/plans', authenticatedSession),
+      apiRequest('/api/catalog/quotations', authenticatedSession),
+    ]).then(([productData, planData, quoteData]) => {
+      if (!active) return;
+      setProducts((productData.products || []).map((p) => ({ ...p, variants: (p.product_variants || []).map((v) => ({ ...v, priceAdjustment: String(v.price_adjustment) })) })));
+      setPlans((planData.plans || []).map((p) => ({ ...p, productIds: p.product_ids || [], minQuantity: p.min_quantity, startsAt: p.starts_at || '', endsAt: p.ends_at || '' })));
+      setQuotes((quoteData.quotations || []).map((q) => ({ ...q, validityDays: q.validity_days, lineItems: (q.line_items || []).map((line) => ({ ...line, unitPrice: String(line.unit_price) })) })));
+      setError('');
+    }).catch((loadError) => {
+      if (!active) return;
+      setError(loadError.message);
+      if (loadError.message.includes('sign in again')) updateSession(null);
+    });
+    return () => { active = false; };
+  }, [session?.access_token, demoMode]);
 
   const rows =
     page === 'Products' ? products : page === 'Plans' ? plans : quotes;
@@ -60,24 +162,66 @@ export default function App() {
     setEditingId(item?.id ?? null);
   }
 
-  function save(event) {
+  async function save(event) {
     event.preventDefault();
-    const savedForm = { ...form, id: editingId ?? Date.now() };
-
-    setRows((current) =>
-      editingId
-        ? current.map((item) => (item.id === editingId ? savedForm : item))
-        : [...current, savedForm]
-    );
-
-    setForm(null);
+    setBusy(true); setError('');
+    try {
+      if (demoMode) {
+        const savedForm = { ...form, id: editingId ?? `demo-${Date.now()}` };
+        setRows((current) => {
+          const next = editingId ? current.map((item) => item.id === editingId ? savedForm : item) : [...current, savedForm];
+          const key = page === 'Products' ? 'subflow-products' : page === 'Plans' ? 'subflow-plans' : 'subflow-quotes';
+          localStorage.setItem(key, JSON.stringify(next));
+          return next;
+        });
+        setForm(null);
+        return;
+      }
+      const path = `/api/catalog/${page === 'Products' ? 'products' : page === 'Plans' ? 'plans' : 'quotations'}${editingId ? `/${editingId}` : ''}`;
+      const body = page === 'Products'
+        ? { name: form.name, type: form.type, description: form.description, price: form.price, cost: form.cost, variants: form.variants.map((v) => ({ name: v.name, price_adjustment: Number(v.priceAdjustment || 0) })) }
+        : page === 'Plans'
+          ? { name: form.name, price: form.price, frequency: form.frequency, min_quantity: Number(form.minQuantity), product_ids: form.productIds, starts_at: form.startsAt || null, ends_at: form.endsAt || null, auto_close: form.autoClose, allow_pause: form.allowPause, allow_early_close: form.allowEarlyClose, allow_renew: form.allowRenew }
+          : { name: form.name, validity_days: Number(form.validityDays), line_items: form.lineItems.map((line) => ({ description: line.description, quantity: Number(line.quantity), unit_price: Number(line.unitPrice) })) };
+      await apiRequest(path, { ...session, save: updateSession }, { method: editingId ? 'PUT' : 'POST', body: JSON.stringify(body) });
+      setForm(null); setSession((current) => ({ ...current }));
+      // Reload lists after a mutation so linked plan/product data stays in sync.
+      const auth = { ...session, save: updateSession };
+      const [p, pl, q] = await Promise.all([apiRequest('/api/catalog/products', auth), apiRequest('/api/catalog/plans', auth), apiRequest('/api/catalog/quotations', auth)]);
+      setProducts((p.products || []).map((x) => ({ ...x, variants: (x.product_variants || []).map((v) => ({ ...v, priceAdjustment: String(v.price_adjustment) })) })));
+      setPlans((pl.plans || []).map((x) => ({ ...x, productIds: x.product_ids || [], minQuantity: x.min_quantity, startsAt: x.starts_at || '', endsAt: x.ends_at || '' })));
+      setQuotes((q.quotations || []).map((x) => ({ ...x, validityDays: x.validity_days, lineItems: (x.line_items || []).map((line) => ({ ...line, unitPrice: String(line.unit_price) })) })));
+    } catch (saveError) { setError(saveError.message); }
+    finally { setBusy(false); }
   }
 
-  function deleteRow(id) {
-    if (confirm('Delete this item?')) {
+  async function deleteRow(id) {
+    if (!confirm('Delete this item?')) return;
+    setError('');
+    try {
+      if (demoMode) {
+        setRows((current) => {
+          const next = current.filter((item) => item.id !== id);
+          const key = page === 'Products' ? 'subflow-products' : page === 'Plans' ? 'subflow-plans' : 'subflow-quotes';
+          localStorage.setItem(key, JSON.stringify(next));
+          return next;
+        });
+        return;
+      }
+      await apiRequest(`/api/catalog/${page === 'Products' ? 'products' : page === 'Plans' ? 'plans' : 'quotations'}/${id}`, { ...session, save: updateSession }, { method: 'DELETE' });
       setRows((current) => current.filter((item) => item.id !== id));
-    }
+    } catch (deleteError) { setError(deleteError.message); }
   }
+
+  async function submitLogin(event) {
+    event.preventDefault(); setLoginError(''); setBusy(true);
+    try { updateSession(await signIn(email, password)); }
+    catch (authError) { setLoginError(authError.message); }
+    finally { setBusy(false); }
+  }
+
+  if (!demoMode && (!supabaseUrl || !supabaseKey)) return <main className="grid min-h-screen place-items-center bg-slate-50 p-4"><section className="w-full max-w-md space-y-4 rounded-xl border bg-white p-8 shadow-sm"><h1 className="text-2xl font-bold text-violet-700">Subflow</h1><p className="text-slate-600">Preview the product, plans, and quotation screens before connecting Supabase.</p><button onClick={startPreview} className="w-full rounded bg-violet-600 px-4 py-2 text-white">Preview catalog</button></section></main>;
+  if (!demoMode && !session?.access_token) return <main className="grid min-h-screen place-items-center bg-slate-50 p-4"><form onSubmit={submitLogin} className="w-full max-w-md space-y-4 rounded-xl border bg-white p-8 shadow-sm"><h1 className="text-2xl font-bold text-violet-700">Subflow</h1><p className="text-slate-500">Sign in with your workspace administrator account.</p><label className="block text-sm">Email<input required type="email" className="mt-1 w-full rounded border p-2" value={email} onChange={(e) => setEmail(e.target.value)} /></label><label className="block text-sm">Password<input required type="password" className="mt-1 w-full rounded border p-2" value={password} onChange={(e) => setPassword(e.target.value)} /></label>{loginError && <p className="text-sm text-red-600">{loginError}</p>}<button disabled={busy} className="w-full rounded bg-violet-600 px-4 py-2 text-white">{busy ? 'Signing in…' : 'Sign in'}</button><button type="button" onClick={startPreview} className="w-full rounded border px-4 py-2 text-slate-700">Preview catalog</button></form></main>;
 
   function changeVariant(index, key, value) {
     setForm({
@@ -101,10 +245,13 @@ export default function App() {
     <main className="min-h-screen bg-slate-50 text-slate-800">
       <header className="flex items-center justify-between border-b bg-white px-8 py-4">
         <h1 className="text-xl font-bold text-violet-700">Subflow</h1>
-        <span className="text-sm text-slate-500">Product &amp; Plans</span>
+        <div className="flex items-center gap-4">{demoMode && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">Preview mode</span>}<span className="text-sm text-slate-500">Product &amp; Plans</span><button onClick={() => demoMode ? exitPreview() : updateSession(null)} className="text-sm text-violet-700">{demoMode ? 'Exit preview' : 'Sign out'}</button></div>
       </header>
 
       <section className="mx-auto max-w-6xl p-8">
+        {error && <p role="alert" className="mb-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        {demoMode && <p className="mb-5 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Preview data is saved in this browser only. Connect Supabase later to use shared workspace data.</p>}
+        {busy && <p className="mb-3 text-xs text-slate-500">Saving changes…</p>}
         <nav className="mb-8 flex gap-3">
           {['Products', 'Plans', 'Quotations'].map((name) => (
             <button
@@ -232,12 +379,15 @@ export default function App() {
       </section>
 
       {form && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget) setForm(null); }}>
           <form
             onSubmit={save}
-            className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-xl bg-white p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="catalog-form-title"
+            className="max-h-[90vh] w-full max-w-xl space-y-4 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
           >
-            <h3 className="text-xl font-bold">
+            <h3 id="catalog-form-title" className="text-xl font-bold">
               {editingId ? 'Edit' : 'Add'}{' '}
               {page === 'Products'
                 ? 'product'
@@ -335,8 +485,9 @@ export default function App() {
                 </div>
 
                 {form.variants.map((variant, i) => (
-                  <div key={i} className="grid grid-cols-2 gap-2">
+                  <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-slate-100 p-3">
                     <input
+                      required
                       placeholder="Variant name"
                       className="rounded border p-2"
                       value={variant.name}
@@ -345,9 +496,11 @@ export default function App() {
                       }
                     />
                     <input
+                      required
                       placeholder="Price adjustment"
                       type="number"
                       step=".01"
+                      min={-Number(form.price || 0)}
                       className="rounded border p-2"
                       value={variant.priceAdjustment}
                       onChange={(e) =>
@@ -361,6 +514,7 @@ export default function App() {
                           Number(variant.priceAdjustment || 0)
                       )}
                     </span>
+                    <button type="button" className="col-span-2 justify-self-start text-xs text-red-600" onClick={() => setForm({ ...form, variants: form.variants.filter((_, index) => index !== i) })}>Remove variant</button>
                   </div>
                 ))}
               </>
@@ -406,6 +560,7 @@ export default function App() {
                     Available from
                     <input
                       type="date"
+                      max={form.endsAt || undefined}
                       className="mt-1 w-full rounded border p-2"
                       value={form.startsAt}
                       onChange={(e) =>
@@ -418,6 +573,7 @@ export default function App() {
                     Available until
                     <input
                       type="date"
+                      min={form.startsAt || undefined}
                       className="mt-1 w-full rounded border p-2"
                       value={form.endsAt}
                       onChange={(e) =>
@@ -531,6 +687,7 @@ export default function App() {
                 {form.lineItems.map((line, index) => (
                   <div key={index} className="grid grid-cols-3 gap-2">
                     <input
+                      required
                       placeholder="Description"
                       className="rounded border p-2"
                       value={line.description}
@@ -542,6 +699,7 @@ export default function App() {
                       aria-label="Quantity"
                       type="number"
                       min="1"
+                      required
                       className="rounded border p-2"
                       value={line.quantity}
                       onChange={(e) =>
@@ -553,6 +711,7 @@ export default function App() {
                       type="number"
                       min="0"
                       step=".01"
+                      required
                       placeholder="Unit price"
                       className="rounded border p-2"
                       value={line.unitPrice}
@@ -574,6 +733,9 @@ export default function App() {
                     </button>
                   </div>
                 ))}
+                <p className="text-right text-sm font-semibold text-slate-700">
+                  Estimated total: {money(form.lineItems.reduce((sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0), 0))}
+                </p>
               </>
             )}
 
@@ -585,8 +747,8 @@ export default function App() {
               >
                 Cancel
               </button>
-              <button className="rounded bg-violet-600 px-4 py-2 text-white">
-                Save
+              <button disabled={busy} className="rounded bg-violet-600 px-4 py-2 text-white disabled:opacity-60">
+                {busy ? 'Saving…' : 'Save'}
               </button>
             </div>
           </form>

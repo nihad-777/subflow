@@ -37,3 +37,16 @@ Do not expose the Supabase service role key in the frontend.
 - Profile name management
 
 Express endpoints require a valid Supabase access token. The staff invitation endpoint checks the caller's admin role and uses the service role key only on the server.
+
+## Product & Plans client
+
+The product catalog screens are in `client/` and the catalog API is in `server/`. To run this part of the project:
+
+1. Run `database/product_catalog.sql` in the same Supabase project after `database/schema.sql`.
+2. Copy `client/.env.example` to `client/.env` and set the Supabase URL, publishable key, and API URL.
+3. Copy `server/.env.example` to `server/.env` and set the same Supabase URL and publishable key plus the secret key. Keep the secret key server-side.
+4. Start the API from `server/` with `npm install` then `npm start`.
+5. Start the product client from `client/` with `npm install` then `npm run dev`.
+6. Sign in with an administrator account. Catalog endpoints are restricted to admins.
+
+Products, variants, plans, plan product links, and quotation templates are persisted in Supabase. Product variant prices are calculated as the product base price plus the variant price adjustment.
