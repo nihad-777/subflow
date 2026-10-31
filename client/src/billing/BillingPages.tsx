@@ -1,6 +1,6 @@
 // Subscriptions, invoices, tax rules and the customer portal.
 // Uses the finance pages' API client and UI kit, so everything looks and behaves the same.
-import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ComponentType, type FormEvent, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { api, qs, setTokenSource } from '../finance/lib/api';
 import { date, money, today } from '../finance/lib/format';
@@ -28,7 +28,8 @@ interface Subscription {
   allowPause: boolean; allowEarlyClose: boolean; allowRenew: boolean;
 }
 interface SubscriptionDetail extends Subscription {
-  lines: { id: string; description: string; quantity: number; unitPrice: number; taxName: string | null; taxRate: number }[];
+  planId: string;
+  lines: { id: string; productId: string; variantId: string | null; taxRuleId: string | null; description: string; quantity: number; unitPrice: number; taxName: string | null; taxRate: number }[];
   events: { from: string | null; to: string; note: string | null; at: string; actor: string | null }[];
   nextStatuses: string[];
 }
@@ -87,7 +88,7 @@ function InvoiceLines({ invoice }: { invoice: InvoiceDetail }) {
 
 // --- subscriptions ------------------------------------------------------------
 
-function NewSubscription({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
+function NewSubscription({ open, editing, onClose, onCreated }: { open: boolean; editing?: SubscriptionDetail | null; onClose: () => void; onCreated: (id: string) => void }) {
   const lookups = useAsync(async () => {
     if (!open) return null;
     const [customers, plans, products, templates, taxes] = await Promise.all([
@@ -103,6 +104,11 @@ function NewSubscription({ open, onClose, onCreated }: { open: boolean; onClose:
   const [form, setForm] = useState(blank);
   const [lines, setLines] = useState([{ productId: '', variantId: '', quantity: 1, taxRuleId: '' }]);
   const [error, setError] = useState<Error | null>(null);
+  useEffect(() => {
+    if (!open || !editing) return;
+    setForm({ customerId: editing.customerId, templateId: '', planId: editing.planId, startDate: editing.startDate, endDate: editing.endDate ?? '', paymentTermsDays: editing.paymentTermsDays });
+    setLines(editing.lines.map((l) => ({ productId: l.productId, variantId: l.variantId ?? '', quantity: l.quantity, taxRuleId: l.taxRuleId ?? '' })));
+  }, [open, editing]);
   const set = (key: keyof typeof blank, value: string | number) => setForm({ ...form, [key]: value });
   const setLine = (i: number, key: string, value: string | number) => setLines(lines.map((l, n) => (n === i ? { ...l, [key]: value, ...(key === 'productId' ? { variantId: '' } : {}) } : l)));
 
@@ -110,7 +116,8 @@ function NewSubscription({ open, onClose, onCreated }: { open: boolean; onClose:
     e.preventDefault();
     setError(null);
     try {
-      const sub = await api.post<{ id: string }>('/subscriptions', { ...form, lines: form.templateId ? [] : lines });
+      const body = { ...form, lines: form.templateId ? [] : lines };
+      const sub = editing ? await api.patch<{ id: string }>(`/subscriptions/${editing.id}`, body) : await api.post<{ id: string }>('/subscriptions', body);
       setForm(blank);
       onCreated(sub.id);
     } catch (err) {
@@ -120,22 +127,26 @@ function NewSubscription({ open, onClose, onCreated }: { open: boolean; onClose:
 
   const data = lookups.data;
   return (
-    <Modal open={open} onClose={onClose} title="New subscription" wide>
+    <Modal open={open} onClose={onClose} title={editing ? `Edit ${editing.number}` : 'New subscription'} wide>
       <ErrorBanner error={lookups.error ?? error} />
       {data && (
         <form className="space-y-3" onSubmit={submit}>
-          <Field label="Customer">
-            <select className="input" required value={form.customerId} onChange={(e) => set('customerId', e.target.value)}>
-              <option value="">Choose a customer</option>
-              {data.customers.map((c) => <option key={c.id} value={c.id}>{c.name || c.email}</option>)}
-            </select>
-          </Field>
-          <Field label="Quotation template" hint="Fills in the plan and products, and starts as a quotation.">
-            <select className="input" value={form.templateId} onChange={(e) => set('templateId', e.target.value)}>
-              <option value="">No template, enter by hand</option>
-              {data.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-          </Field>
+          {!editing && (
+            <>
+              <Field label="Customer">
+                <select className="input" required value={form.customerId} onChange={(e) => set('customerId', e.target.value)}>
+                  <option value="">Choose a customer</option>
+                  {data.customers.map((c) => <option key={c.id} value={c.id}>{c.name || c.email}</option>)}
+                </select>
+              </Field>
+              <Field label="Quotation template" hint="Fills in the plan and products, and starts as a quotation.">
+                <select className="input" value={form.templateId} onChange={(e) => set('templateId', e.target.value)}>
+                  <option value="">No template, enter by hand</option>
+                  {data.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </Field>
+            </>
+          )}
           {!form.templateId && (
             <Field label="Recurring plan">
               <select className="input" required value={form.planId} onChange={(e) => set('planId', e.target.value)}>
@@ -171,7 +182,7 @@ function NewSubscription({ open, onClose, onCreated }: { open: boolean; onClose:
           })}
           <div className="flex justify-between">
             {!form.templateId ? <button type="button" className="btn-ghost" onClick={() => setLines([...lines, { productId: '', variantId: '', quantity: 1, taxRuleId: '' }])}>+ Add line</button> : <span />}
-            <button className="btn-primary">Create</button>
+            <button className="btn-primary">{editing ? 'Save changes' : 'Create'}</button>
           </div>
         </form>
       )}
@@ -183,6 +194,7 @@ function SubscriptionDrawer({ id, portal, onClose, onChanged }: { id: string | n
   const base = portal ? '/portal/subscriptions' : '/subscriptions';
   const detail = useAsync(() => (id ? api.get<SubscriptionDetail>(`${base}/${id}`) : Promise.resolve(null)), [id]);
   const [error, setError] = useState<Error | null>(null);
+  const [editing, setEditing] = useState(false);
   const sub = detail.data;
   const act = async (path: string, body?: object) => {
     setError(null);
@@ -226,6 +238,7 @@ function SubscriptionDrawer({ id, portal, onClose, onChanged }: { id: string | n
             {portal
               ? portalActions.map(([path, name]) => <button key={path} className="btn-secondary" onClick={() => void act(path)}>{name}</button>)
               : <>
+                  {(sub.status === 'draft' || sub.status === 'quotation') && <button className="btn-secondary" onClick={() => setEditing(true)}>Edit</button>}
                   {sub.nextStatuses.map((s) => <button key={s} className={s === 'closed' ? 'btn-secondary' : 'btn-primary'} onClick={() => void act('status', { status: s })}>{STATUS_ACTION[s]}</button>)}
                   {sub.allowRenew && (sub.status === 'closed' || sub.endDate) && <button className="btn-secondary" onClick={() => void act('renew')}>Renew</button>}
                 </>}
@@ -234,6 +247,7 @@ function SubscriptionDrawer({ id, portal, onClose, onChanged }: { id: string | n
           <ul className="space-y-1 text-sm text-slate-600">
             {sub.events.map((e, i) => <li key={i}>{new Date(e.at).toLocaleString()}: {label(e.to)}{e.actor ? ` by ${e.actor}` : ''}{e.note ? ` (${e.note})` : ''}</li>)}
           </ul>
+          {!portal && <NewSubscription open={editing} editing={sub} onClose={() => setEditing(false)} onCreated={() => { setEditing(false); detail.reload(); onChanged(); }} />}
         </>
       )}
     </Drawer>
@@ -450,6 +464,29 @@ export function TaxRulesPage() {
       </div>
     </div>
   );
+}
+
+// --- dashboard cards ----------------------------------------------------------
+
+interface Overview { activeSubscriptions: number; quotations: number; draftInvoices: number; openInvoices: number; overdueInvoices: number; outstanding: number }
+
+/** Live numbers for the role dashboards. Card is the app's own stat card. */
+export function OverviewCards({ role, Card }: { role: string; Card: ComponentType<{ label: string; value: string; detail: string; icon: string }> }) {
+  const overview = useAsync(() => api.get<Overview>('/overview'), []);
+  const o = overview.data;
+  if (overview.error) return <p className="form-error">{overview.error.message}</p>;
+  if (!o) return <div className="loading-screen"><span className="spinner" /> Loading your numbers</div>;
+  return role === 'customer'
+    ? <>
+        <Card label="Active subscriptions" value={String(o.activeSubscriptions)} detail={`${o.quotations} quotations to review`} icon="check" />
+        <Card label="Unpaid invoices" value={String(o.openInvoices)} detail={`${o.overdueInvoices} overdue`} icon="shield" />
+        <Card label="Amount you owe" value={money(o.outstanding)} detail="Across confirmed invoices" icon="user" />
+      </>
+    : <>
+        <Card label="Active subscriptions" value={String(o.activeSubscriptions)} detail={`${o.quotations} quotations open`} icon="check" />
+        <Card label="Invoices to confirm" value={String(o.draftInvoices)} detail={`${o.overdueInvoices} overdue`} icon="shield" />
+        <Card label="Still owed" value={money(o.outstanding)} detail={`${o.openInvoices} unpaid invoices`} icon="user" />
+      </>;
 }
 
 // --- customer portal ----------------------------------------------------------

@@ -62,6 +62,14 @@ async function insertLine(tx: Tx, subscriptionId: string, l: z.infer<typeof line
   );
 }
 
+/** Rules shared by creating and editing: plan availability dates and minimum quantity. */
+function checkAgainstPlan(plan: any, startDate: string, quantity: number) {
+  if ((plan.starts_at && startDate < plan.starts_at) || (plan.ends_at && startDate > plan.ends_at)) {
+    throw badRequest('PLAN_NOT_AVAILABLE', 'This plan is not available on that start date');
+  }
+  if (quantity < plan.min_quantity) throw badRequest('BELOW_MIN_QUANTITY', `This plan needs at least ${plan.min_quantity} units`);
+}
+
 export async function createSubscription(body: unknown, actor: AuthUser) {
   const b = parse(createSchema, body);
   if (b.endDate && b.endDate < b.startDate) throw badRequest('INVALID_DATES', 'The expiry date cannot be before the start date');
@@ -72,15 +80,14 @@ export async function createSubscription(body: unknown, actor: AuthUser) {
     if (b.templateId && !template) throw notFound('Quotation template');
     const planId = b.planId ?? template?.plan_id;
     if (!planId) throw badRequest('PLAN_REQUIRED', 'Choose a recurring plan');
-    const plan = await queryOne('SELECT frequency, min_quantity FROM plans WHERE id = $1', [planId], tx);
+    const plan = await queryOne('SELECT frequency, min_quantity, starts_at, ends_at FROM plans WHERE id = $1', [planId], tx);
     if (!plan) throw notFound('Plan');
     const customer = await queryOne(`SELECT id FROM profiles WHERE id = $1 AND role = 'customer'`, [b.customerId], tx);
     if (!customer) throw notFound('Customer');
 
     const lines = b.lines.length ? b.lines : parse(z.array(lineSchema), template?.line_items ?? []);
     if (!lines.length) throw badRequest('LINES_REQUIRED', 'Add at least one product line');
-    const quantity = lines.reduce((a, l) => a + l.quantity, 0);
-    if (quantity < plan.min_quantity) throw badRequest('BELOW_MIN_QUANTITY', `This plan needs at least ${plan.min_quantity} units`);
+    checkAgainstPlan(plan, b.startDate, lines.reduce((a, l) => a + l.quantity, 0));
 
     const status: Status = template ? 'quotation' : 'draft';
     const number = await nextNumber(tx, 'SUB', b.startDate);
@@ -93,6 +100,31 @@ export async function createSubscription(body: unknown, actor: AuthUser) {
     for (const l of lines) await insertLine(tx, sub!.id, l);
     await logEvent(tx, sub!.id, null, status, actor.id, template ? 'Created from a quotation template' : 'Created');
     return getSubscription(sub!.id, actor, tx);
+  });
+}
+
+const updateSchema = createSchema.omit({ customerId: true, templateId: true }).extend({ planId: z.string().uuid() });
+
+/** Quotes and drafts stay editable until they are confirmed. Agreed subscriptions never change. */
+export async function updateSubscription(id: string, body: unknown, actor: AuthUser) {
+  const b = parse(updateSchema, body);
+  if (b.endDate && b.endDate < b.startDate) throw badRequest('INVALID_DATES', 'The expiry date cannot be before the start date');
+  if (!b.lines.length) throw badRequest('LINES_REQUIRED', 'Add at least one product line');
+  return withTransaction(async (tx) => {
+    const sub = await queryOne('SELECT status FROM subscriptions WHERE id = $1 FOR UPDATE', [id], tx);
+    if (!sub) throw notFound('Subscription');
+    if (sub.status !== 'draft' && sub.status !== 'quotation') throw conflict('NOT_EDITABLE', 'Only drafts and quotations can be edited');
+    const plan = await queryOne('SELECT frequency, min_quantity, starts_at, ends_at FROM plans WHERE id = $1', [b.planId], tx);
+    if (!plan) throw notFound('Plan');
+    checkAgainstPlan(plan, b.startDate, b.lines.reduce((a, l) => a + l.quantity, 0));
+    await tx.query(
+      `UPDATE subscriptions SET plan_id = $2, billing_frequency = $3, start_date = $4, end_date = $5, payment_terms_days = $6, updated_at = now() WHERE id = $1`,
+      [id, b.planId, plan.frequency, b.startDate, b.endDate ?? null, b.paymentTermsDays],
+    );
+    await tx.query('DELETE FROM subscription_items WHERE subscription_id = $1', [id]);
+    for (const l of b.lines) await insertLine(tx, id, l);
+    await logEvent(tx, id, sub.status, sub.status, actor.id, 'Edited');
+    return getSubscription(id, actor, tx);
   });
 }
 
@@ -117,7 +149,7 @@ export async function getSubscription(id: string, actor: AuthUser, db: Db = pool
   // Same answer as a missing row, so ids cannot be probed.
   if (!sub || (actor.role === 'CUSTOMER' && (sub.customerId !== actor.id || sub.status === 'draft'))) throw notFound('Subscription');
   const lines = await query(
-    `SELECT i.id, i.product_id AS "productId", i.description, i.quantity::float AS quantity, i.unit_price::float AS "unitPrice",
+    `SELECT i.id, i.product_id AS "productId", i.product_variant_id AS "variantId", i.tax_rule_id AS "taxRuleId", i.description, i.quantity::float AS quantity, i.unit_price::float AS "unitPrice",
             t.name AS "taxName", COALESCE(t.tax_rate, 0)::float AS "taxRate"
        FROM subscription_items i LEFT JOIN tax_rules t ON t.id = i.tax_rule_id WHERE i.subscription_id = $1 ORDER BY i.created_at`,
     [id], db);

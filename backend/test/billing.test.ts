@@ -73,6 +73,40 @@ describe('subscription lifecycle', () => {
   });
 });
 
+describe('editing and plan rules', () => {
+  it('edits a quotation until it is confirmed', async () => {
+    const created = await as(staff).post('/subscriptions', { customerId: customer, planId, startDate: todayStr(), lines: [{ productId, quantity: 1 }] });
+    const id = created.body.id;
+    await as(staff).post(`/subscriptions/${id}/status`, { status: 'quotation' });
+    const body = { planId, startDate: todayStr(), paymentTermsDays: 30, lines: [{ productId, quantity: 4 }] };
+    const edited = await as(staff).patch(`/subscriptions/${id}`, body);
+    expect(edited.body).toMatchObject({ paymentTermsDays: 30, status: 'quotation' });
+    expect(edited.body.lines).toHaveLength(1);
+    expect(edited.body.lines[0].quantity).toBe(4);
+    await as(staff).post(`/subscriptions/${id}/status`, { status: 'confirmed' });
+    expect((await as(staff).patch(`/subscriptions/${id}`, body)).status).toBe(409);
+    expect((await as(customer).patch(`/subscriptions/${id}`, body)).status).toBe(403);
+  });
+
+  it('refuses a start date outside the plan availability dates', async () => {
+    const dated = (await as(admin).post('/catalog/plans', { name: 'Season', price: 1, frequency: 'monthly', startsAt: '2026-01-01', endsAt: '2026-03-31' })).body.id;
+    const late = await as(staff).post('/subscriptions', { customerId: customer, planId: dated, startDate: '2026-05-01', lines: [{ productId, quantity: 1 }] });
+    expect(late.body.error.code).toBe('PLAN_NOT_AVAILABLE');
+  });
+});
+
+describe('dashboard overview', () => {
+  it('counts everything for staff and only their own for a customer', async () => {
+    await activeSub();
+    await as(admin).post('/billing/run', { date: todayStr() });
+    const id = (await as(staff).get('/invoices')).body.items[0].id;
+    await as(staff).post(`/invoices/${id}/confirm`);
+    expect((await as(staff).get('/overview')).body).toMatchObject({ activeSubscriptions: 1, openInvoices: 1, outstanding: 708 });
+    expect((await as(customer).get('/overview')).body).toMatchObject({ activeSubscriptions: 1, outstanding: 708 });
+    expect((await as(other).get('/overview')).body).toMatchObject({ activeSubscriptions: 0, outstanding: 0 });
+  });
+});
+
 describe('billing run', () => {
   it('creates a draft invoice with tax, and a second run creates nothing', async () => {
     await activeSub();

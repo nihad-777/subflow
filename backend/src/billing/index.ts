@@ -4,6 +4,7 @@ import { Router, type Request } from 'express';
 import { z } from 'zod';
 import cron from 'node-cron';
 import { asyncHandler, pagination, parse, uuidParam } from '../payments/lib/http.js';
+import { queryOne } from '../payments/lib/db.js';
 import { notFound } from '../payments/lib/errors.js';
 import { todayStr } from '../payments/lib/dates.js';
 import { requireRole } from '../payments/middleware/auth.js';
@@ -20,6 +21,24 @@ export function billingRouter() {
   const r = Router();
   r.use('/catalog', catalogRouter);
 
+  // Dashboard cards. Customers only ever count their own records.
+  r.get('/overview', asyncHandler(async (req, res) => {
+    const customerId = req.user!.role === 'CUSTOMER' ? req.user!.id : null;
+    res.json(await queryOne(
+      `WITH open_invoices AS (
+         SELECT i.due_date, i.total_amount - COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id AND p.status = 'POSTED'), 0) AS balance
+           FROM invoices i WHERE i.status = 'confirmed' AND ($1::uuid IS NULL OR i.customer_id = $1)
+       )
+       SELECT (SELECT count(*)::int FROM subscriptions s WHERE s.status = 'active' AND ($1::uuid IS NULL OR s.customer_id = $1)) AS "activeSubscriptions",
+              (SELECT count(*)::int FROM subscriptions s WHERE s.status = 'quotation' AND ($1::uuid IS NULL OR s.customer_id = $1)) AS quotations,
+              (SELECT count(*)::int FROM invoices i WHERE i.status = 'draft' AND $1::uuid IS NULL) AS "draftInvoices",
+              (SELECT count(*)::int FROM open_invoices WHERE balance > 0) AS "openInvoices",
+              (SELECT count(*)::int FROM open_invoices WHERE balance > 0 AND due_date < CURRENT_DATE) AS "overdueInvoices",
+              (SELECT COALESCE(SUM(balance), 0)::float FROM open_invoices WHERE balance > 0) AS outstanding`,
+      [customerId],
+    ));
+  }));
+
   r.get('/subscriptions', internal, asyncHandler(async (req, res) => {
     const page = pagination(req.query);
     const { status, q, customerId } = filters(req);
@@ -27,6 +46,7 @@ export function billingRouter() {
   }));
   r.post('/subscriptions', internal, asyncHandler(async (req, res) => { res.status(201).json(await subs.createSubscription(req.body, req.user!)); }));
   r.get('/subscriptions/:id', internal, asyncHandler(async (req, res) => { res.json(await subs.getSubscription(uuidParam(req), req.user!)); }));
+  r.patch('/subscriptions/:id', internal, asyncHandler(async (req, res) => { res.json(await subs.updateSubscription(uuidParam(req), req.body, req.user!)); }));
   r.post('/subscriptions/:id/status', internal, asyncHandler(async (req, res) => {
     const b = parse(z.object({ status: z.enum(subs.STATUSES), note: z.string().max(300).optional() }), req.body);
     res.json(await subs.changeStatus(uuidParam(req), b.status, req.user!, b.note));
