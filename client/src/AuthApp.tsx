@@ -1,9 +1,10 @@
 import { createContext, FormEvent, useContext, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, Bell, Check, CircleHelp, Command, Home, LogOut, Menu, Package, Shield, Users, X } from 'lucide-react'
+import { ArrowRight, BadgePercent, Bell, Check, CircleHelp, Command, Home, LogOut, Menu, Package, Shield, Users, X } from 'lucide-react'
 import type { Session, User } from '@supabase/supabase-js'
 import { AppRole, isSupabaseConfigured, Profile, supabase } from './supabase'
 import ProductWorkspace from './ProductWorkspace.jsx'
+import FinancePage from './finance/FinancePage'
 import './styles.css'
 
 type AuthState = { session: Session | null; user: User | null; profile: Profile | null; loading: boolean; refreshProfile: () => Promise<void> }
@@ -93,6 +94,7 @@ const menu = [
   { label: 'Overview', icon: Home, path: '' },
   { label: 'My profile', icon: Users, path: '/profile' },
   { label: 'Products & plans', icon: Package, path: '/catalog', admin: true },
+  { label: 'Finance & reports', icon: BadgePercent, path: '/finance', finance: true },
   { label: 'Team members', icon: Users, path: '/team', admin: true },
 ]
 
@@ -100,7 +102,7 @@ function Workspace({ children }: { children: React.ReactNode }) {
   const { profile } = useAuth(); const [open, setOpen] = useState(false)
   const role = profile?.role || 'customer'
   const roleTitle = role.charAt(0).toUpperCase() + role.slice(1)
-  return <div className="workspace"><aside className={`sidebar ${open ? 'sidebar-open' : ''}`}><div className="side-brand"><Brand /><button className="icon-btn side-close" onClick={() => setOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-switch"><div className="workspace-avatar">S</div><div><b>Subflow workspace</b><span>{roleTitle} account</span></div><span className="switch-chevron">⌄</span></div><div className="side-label">WORKSPACE</div><nav className="side-nav">{menu.filter(item => !item.admin || role === 'admin').map(item => <Link key={item.path} to={item.path ? `/app${item.path}` : `/app/${role}`} className={`side-link ${!item.path ? 'active' : ''}`} onClick={() => setOpen(false)}><item.icon size={17} /><span>{item.label}</span>{item.admin && <span className="nav-count">{role === 'admin' ? '›' : ''}</span>}</Link>)}</nav><div className="sidebar-bottom"><div className="help-box"><div className="help-icon"><CircleHelp size={16} /></div><b>Need a hand?</b><span>Our team is here to help.</span><a href="mailto:support@subflow.app">Visit help center <ArrowRight size={13} /></a></div><div className="side-profile"><div className="profile-avatar">{(profile?.full_name || profile?.email || 'U').slice(0, 1).toUpperCase()}</div><div className="profile-copy"><b>{profile?.full_name || 'Your profile'}</b><span>{profile?.email}</span></div><button className="icon-btn logout-btn" title="Sign out" onClick={() => void supabase.auth.signOut()}><LogOut size={17} /></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-btn menu-toggle" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div className="breadcrumb">Workspace <span>/</span> <b>{roleTitle} overview</b></div><div className="top-actions"><button className="icon-btn notification-btn" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">{(profile?.full_name || 'U').slice(0, 1).toUpperCase()}</div></div></header><main className="page-content">{children}</main></div>{open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}</div>
+  return <div className="workspace"><aside className={`sidebar ${open ? 'sidebar-open' : ''}`}><div className="side-brand"><Brand /><button className="icon-btn side-close" onClick={() => setOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-switch"><div className="workspace-avatar">S</div><div><b>Subflow workspace</b><span>{roleTitle} account</span></div><span className="switch-chevron">⌄</span></div><div className="side-label">WORKSPACE</div><nav className="side-nav">{menu.filter(item => (!item.admin || role === 'admin') && (!item.finance || role === 'admin' || role === 'staff')).map(item => <Link key={item.path} to={item.path ? `/app${item.path}` : `/app/${role}`} className={`side-link ${!item.path ? 'active' : ''}`} onClick={() => setOpen(false)}><item.icon size={17} /><span>{item.label}</span>{item.admin && <span className="nav-count">{role === 'admin' ? '›' : ''}</span>}</Link>)}</nav><div className="sidebar-bottom"><div className="help-box"><div className="help-icon"><CircleHelp size={16} /></div><b>Need a hand?</b><span>Our team is here to help.</span><a href="mailto:support@subflow.app">Visit help center <ArrowRight size={13} /></a></div><div className="side-profile"><div className="profile-avatar">{(profile?.full_name || profile?.email || 'U').slice(0, 1).toUpperCase()}</div><div className="profile-copy"><b>{profile?.full_name || 'Your profile'}</b><span>{profile?.email}</span></div><button className="icon-btn logout-btn" title="Sign out" onClick={() => void supabase.auth.signOut()}><LogOut size={17} /></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-btn menu-toggle" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div className="breadcrumb">Workspace <span>/</span> <b>{roleTitle} overview</b></div><div className="top-actions"><button className="icon-btn notification-btn" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">{(profile?.full_name || 'U').slice(0, 1).toUpperCase()}</div></div></header><main className="page-content">{children}</main></div>{open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}</div>
 }
 
 function DashboardPage() {
@@ -142,12 +144,19 @@ function ProfilePage() {
 function WorkspaceRoute() {
   if (window.location.pathname.endsWith('/team')) return <Protected role="admin"><Workspace><TeamPage /></Workspace></Protected>
   if (window.location.pathname.endsWith('/profile')) return <Protected><Workspace><ProfilePage /></Workspace></Protected>
+  if (window.location.pathname.endsWith('/finance')) return <FinanceRoute />
   if (window.location.pathname.endsWith('/catalog')) return <Protected role="admin"><Workspace><ProductWorkspace /></Workspace></Protected>
   return <Protected><Workspace><DashboardPage /></Workspace></Protected>
 }
 
+function FinanceRoute() {
+  const { profile, session } = useAuth()
+  if (profile && profile.role === 'customer') return <Navigate to={`/app/${profile.role}`} replace />
+  return <Protected><Workspace><FinancePage session={session} isAdmin={profile?.role === 'admin'} /></Workspace></Protected>
+}
+
 function App() {
-  return <AuthProvider>{!isSupabaseConfigured ? <ConfigNotice /> : <Routes><Route path="/" element={<Navigate to="/app" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/reset" element={<ResetPage />} /><Route path="/update-password" element={<UpdatePasswordPage />} /><Route path="/app" element={<AppHome />} /><Route path="/app/:role" element={<WorkspaceRoute />} /><Route path="/app/team" element={<WorkspaceRoute />} /><Route path="/app/profile" element={<WorkspaceRoute />} /><Route path="/app/catalog" element={<WorkspaceRoute />} /><Route path="*" element={<Navigate to="/app" replace />} /></Routes>}</AuthProvider>
+  return <AuthProvider>{!isSupabaseConfigured ? <ConfigNotice /> : <Routes><Route path="/" element={<Navigate to="/app" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/reset" element={<ResetPage />} /><Route path="/update-password" element={<UpdatePasswordPage />} /><Route path="/app" element={<AppHome />} /><Route path="/app/:role" element={<WorkspaceRoute />} /><Route path="/app/team" element={<WorkspaceRoute />} /><Route path="/app/profile" element={<WorkspaceRoute />} /><Route path="/app/catalog" element={<WorkspaceRoute />} /><Route path="/app/finance" element={<WorkspaceRoute />} /><Route path="*" element={<Navigate to="/app" replace />} /></Routes>}</AuthProvider>
 }
 
 function AppHome() { const { loading, user, profile } = useAuth(); if (loading) return <div className="loading-screen"><span className="spinner" /> Loading your workspace</div>; if (!user) return <Navigate to="/login" replace />; return <Navigate to={`/app/${profile?.role || 'customer'}`} replace /> }
