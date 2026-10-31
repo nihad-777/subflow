@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from './finance/lib/api';
 import './catalog.css';
 
 const empty = {
@@ -26,11 +27,13 @@ const empty = {
   Quotations: {
     name: '',
     validityDays: 30,
+    planId: '',
     lineItems: [],
   },
 };
 
-const money = (value) => `$${Number(value || 0).toFixed(2)}`;
+const money = (value) => `₹${Number(value || 0).toFixed(2)}`;
+const paths = { Products: 'products', Plans: 'plans', Quotations: 'templates' };
 
 export default function App() {
   const [page, setPage] = useState('Products');
@@ -40,6 +43,19 @@ export default function App() {
   const [form, setForm] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [query, setQuery] = useState('');
+  const [taxes, setTaxes] = useState([]);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    Promise.all(['products', 'plans', 'templates', 'taxes'].map((path) => api.get(`/catalog/${path}`)))
+      .then(([loadedProducts, loadedPlans, loadedTemplates, loadedTaxes]) => {
+        setProducts(loadedProducts);
+        setPlans(loadedPlans);
+        setQuotes(loadedTemplates);
+        setTaxes(loadedTaxes);
+      })
+      .catch((err) => setError(err.message));
+  }, []);
 
   const rows =
     page === 'Products' ? products : page === 'Plans' ? plans : quotes;
@@ -66,22 +82,33 @@ export default function App() {
     setEditingId(item?.id ?? null);
   }
 
-  function save(event) {
+  async function save(event) {
     event.preventDefault();
-    const savedForm = { ...form, id: editingId ?? Date.now() };
-
-    setRows((current) =>
-      editingId
-        ? current.map((item) => (item.id === editingId ? savedForm : item))
-        : [...current, savedForm]
-    );
-
-    setForm(null);
+    setError('');
+    try {
+      const path = `/catalog/${paths[page]}`;
+      const saved = editingId
+        ? await api.patch(`${path}/${editingId}`, form)
+        : await api.post(path, form);
+      setRows((current) =>
+        editingId
+          ? current.map((item) => (item.id === editingId ? saved : item))
+          : [saved, ...current]
+      );
+      setForm(null);
+    } catch (err) {
+      setError(err.details?.formErrors?.[0] || err.message);
+    }
   }
 
-  function deleteRow(id) {
-    if (confirm('Delete this item?')) {
+  async function deleteRow(id) {
+    if (!confirm('Delete this item?')) return;
+    setError('');
+    try {
+      await api.delete(`/catalog/${paths[page]}/${id}`);
       setRows((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      setError(err.message);
     }
   }
 
@@ -106,6 +133,8 @@ export default function App() {
   return (
     <main className="catalog-root">
       <section className="catalog-content">
+        {error && !form && <p className="mb-3 text-sm text-red-600">{error}</p>}
+
         <div className="catalog-heading-row">
           <div>
             <span className="eyebrow">CATALOG MANAGEMENT</span>
@@ -534,6 +563,20 @@ export default function App() {
                   />
                 </label>
 
+                <label className="block text-sm">
+                  Recurring plan
+                  <select
+                    className="mt-1 w-full rounded border p-2"
+                    value={form.planId || ''}
+                    onChange={(e) => setForm({ ...form, planId: e.target.value })}
+                  >
+                    <option value="">Choose when quoting</option>
+                    {plans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>{plan.name}</option>
+                    ))}
+                  </select>
+                </label>
+
                 <div className="flex items-center justify-between text-sm font-medium">
                   <span>Quotation line items</span>
                   <button
@@ -544,7 +587,7 @@ export default function App() {
                         ...form,
                         lineItems: [
                           ...form.lineItems,
-                          { description: '', quantity: 1, unitPrice: '' },
+                          { productId: '', variantId: '', quantity: 1, taxRuleId: '' },
                         ],
                       })
                     }
@@ -555,14 +598,20 @@ export default function App() {
 
                 {form.lineItems.map((line, index) => (
                   <div key={index} className="grid grid-cols-3 gap-2">
-                    <input
-                      placeholder="Description"
+                    <select
+                      aria-label="Product"
+                      required
                       className="rounded border p-2"
-                      value={line.description}
+                      value={line.productId}
                       onChange={(e) =>
-                        changeLineItem(index, 'description', e.target.value)
+                        changeLineItem(index, 'productId', e.target.value)
                       }
-                    />
+                    >
+                      <option value="">Product</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>{product.name}</option>
+                      ))}
+                    </select>
                     <input
                       aria-label="Quantity"
                       type="number"
@@ -573,18 +622,19 @@ export default function App() {
                         changeLineItem(index, 'quantity', e.target.value)
                       }
                     />
-                    <input
-                      aria-label="Unit price"
-                      type="number"
-                      min="0"
-                      step=".01"
-                      placeholder="Unit price"
+                    <select
+                      aria-label="Tax"
                       className="rounded border p-2"
-                      value={line.unitPrice}
+                      value={line.taxRuleId || ''}
                       onChange={(e) =>
-                        changeLineItem(index, 'unitPrice', e.target.value)
+                        changeLineItem(index, 'taxRuleId', e.target.value)
                       }
-                    />
+                    >
+                      <option value="">No tax</option>
+                      {taxes.map((tax) => (
+                        <option key={tax.id} value={tax.id}>{tax.name}</option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       className="text-left text-xs text-red-600"
@@ -601,6 +651,8 @@ export default function App() {
                 ))}
               </>
             )}
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
 
             <div className="flex justify-end gap-3 border-t pt-4">
               <button

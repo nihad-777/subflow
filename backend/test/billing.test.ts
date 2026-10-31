@@ -173,6 +173,9 @@ describe('customer portal', () => {
     const id = await activeSub();
     await as(admin).post('/billing/run', { date: todayStr() });
     const invoiceId = (await as(staff).get('/invoices')).body.items[0].id;
+    expect((await as(customer).get('/portal/invoices')).body.total).toBe(0); // drafts stay internal
+    expect((await as(customer).get(`/portal/invoices/${invoiceId}`)).status).toBe(404);
+    await as(staff).post(`/invoices/${invoiceId}/confirm`);
     expect((await as(customer).get('/portal/invoices')).body.total).toBe(1);
     expect((await as(other).get('/portal/invoices')).body.total).toBe(0);
     expect((await as(other).get(`/portal/invoices/${invoiceId}`)).status).toBe(404);

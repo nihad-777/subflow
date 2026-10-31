@@ -10,12 +10,14 @@ Subflow team application with authentication, role-based workspaces, and product
 
 ## Local setup
 
-1. Coordinate Supabase project setup and run `database/schema.sql` in its SQL Editor.
+1. Coordinate Supabase project setup and run these in its SQL Editor, in this order: `database/schema.sql`, `product_catalog.sql`, `subscriptions_billing.sql`, `billing_integration.sql`, `payments_analytics.sql`.
 2. Copy `client/.env.example` to `client/.env` and set the project URL and publishable key.
-3. Copy `backend/.env.example` to `backend/.env`. Set the project URL, anon key, and service role key there. Keep the service role key private and server-side.
+3. Copy `backend/.env.example` to `backend/.env`. Set the project URL, anon key, service role key and `DATABASE_URL` (Supabase > Connect > Session pooler) there. Keep these private and server-side.
 4. Register the first trusted account, then set its role to `admin` in the SQL Editor with `update public.profiles set role = 'admin' where email = 'you@example.com';`.
 5. Install and run the frontend from `client/` with `npm install` then `npm run dev`.
 6. Install and run the API from `backend/` with `npm install` then `npm run dev`.
+
+In Supabase > Authentication > Sign In / Providers, set the password policy to a minimum of 9 characters with lowercase, uppercase and symbols, so the rule is enforced on the server as well as in the forms.
 
 Set the Supabase Auth site URL to `http://localhost:5173` during local development. Add `http://localhost:5173/update-password` to the allowed redirect URLs so password reset links return to the app.
 
@@ -35,5 +37,15 @@ Do not expose the Supabase service role key in the frontend.
 - Admin, staff, and customer workspaces with shared sidebar and top navigation
 - Admin member list and staff invitation endpoint (`POST /api/admin/staff`)
 - Profile name management
+- Products with variants, recurring plans, quotation templates and tax rules
+- Subscriptions from Draft to Closed, with a history of every change
+- Billing run that creates invoices with tax and discounts and never bills a period twice, daily at 01:00 or from the Invoices page
+- Invoice confirm, cancel, send by email (needs `SMTP_URL`) and PDF download
+- Discounts, payments, overdue tracking and the revenue dashboard
+- Customer portal: view subscriptions and invoices, accept quotes, pause, close, renew, download PDFs
+
+## Tests and demo data
+
+`npm test` in `backend/` needs a local Postgres at `postgresql://subflow:subflow@localhost:5432/subflow_test`. `npm run payments:seed:large` fills a local database with about 5,000 subscriptions.
 
 Express endpoints require a valid Supabase access token. The staff invitation endpoint checks the caller's admin role and uses the service role key only on the server.

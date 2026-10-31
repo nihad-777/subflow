@@ -96,12 +96,13 @@ export async function createSubscription(body: unknown, actor: AuthUser) {
   });
 }
 
-export async function listSubscriptions(f: { status?: string; q?: string; customerId?: string; offset: number; limit: number }) {
+export async function listSubscriptions(f: { status?: string; q?: string; customerId?: string; hideDrafts?: boolean; offset: number; limit: number }) {
   const where: string[] = [];
   const params: unknown[] = [];
   const add = (sql: string, v: unknown) => { params.push(v); where.push(sql.replace('?', `$${params.length}`)); };
   if (f.status) add('s.status = ?', f.status);
   if (f.customerId) add('s.customer_id = ?', f.customerId);
+  if (f.hideDrafts) where.push(`s.status <> 'draft'`);
   if (f.q) add(`(s.subscription_number || ' ' || c.full_name) ILIKE ?`, `%${f.q}%`);
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const [items, count] = await Promise.all([
@@ -114,7 +115,7 @@ export async function listSubscriptions(f: { status?: string; q?: string; custom
 export async function getSubscription(id: string, actor: AuthUser, db: Db = pool) {
   const sub = await queryOne(`${SUB_SELECT} WHERE s.id = $1`, [id], db);
   // Same answer as a missing row, so ids cannot be probed.
-  if (!sub || (actor.role === 'CUSTOMER' && sub.customerId !== actor.id)) throw notFound('Subscription');
+  if (!sub || (actor.role === 'CUSTOMER' && (sub.customerId !== actor.id || sub.status === 'draft'))) throw notFound('Subscription');
   const lines = await query(
     `SELECT i.id, i.product_id AS "productId", i.description, i.quantity::float AS quantity, i.unit_price::float AS "unitPrice",
             t.name AS "taxName", COALESCE(t.tax_rate, 0)::float AS "taxRate"

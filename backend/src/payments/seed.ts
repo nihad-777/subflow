@@ -74,7 +74,7 @@ async function main() {
   const today = todayStr();
 
   await client.query(`TRUNCATE payments, discount_usages, discount_targets, discounts, invoice_items, invoices,
-                      subscription_items, subscriptions, plans, products RESTART IDENTITY CASCADE`);
+                      subscription_items, subscriptions, plans, products, tax_rules, quotation_templates, number_series RESTART IDENTITY CASCADE`);
   await client.query(`DELETE FROM auth.users WHERE email LIKE '%@subflow.test'`);
 
   // --- people -----------------------------------------------------------------
@@ -123,9 +123,15 @@ async function main() {
     ['uuid', 'text', 'uuid', 'uuid', 'text', 'date', 'text', 'date'],
     subs.map((s) => [SUB(s.id), `SUB-${String(s.id).padStart(5, '0')}`, s.customer, PLAN(s.plan.id), s.status, addDays(today, -200), s.plan.period,
       s.status === 'active' ? addDays(today, s.id === 1 ? 0 : 1 + (s.id % 28)) : null]));
-  await insertMany(client, 'subscription_items', ['subscription_id', 'product_id', 'quantity', 'unit_price'],
-    ['uuid', 'uuid', 'int', 'numeric'],
-    subs.flatMap((s) => s.lines.map((l) => [SUB(s.id), PRODUCT(l.product), l.qty, centsToSql(l.price)])));
+  await insertMany(client, 'subscription_items', ['subscription_id', 'product_id', 'description', 'quantity', 'unit_price'],
+    ['uuid', 'uuid', 'text', 'int', 'numeric'],
+    subs.flatMap((s) => s.lines.map((l) => [SUB(s.id), PRODUCT(l.product), PRODUCTS[l.product - 1].name, l.qty, centsToSql(l.price)])));
+  const tax = await client.query<{ id: string }>(`INSERT INTO tax_rules (name, tax_rate, description) VALUES ('GST 18%', 18, 'Standard rate') RETURNING id`);
+  await client.query('UPDATE subscription_items SET tax_rule_id = $1', [tax.rows[0].id]);
+  await client.query(
+    `INSERT INTO quotation_templates (name, validity_days, plan_id, line_items) VALUES ('Team starter', 30, $1, $2)`,
+    [PLAN(1), JSON.stringify([{ productId: PRODUCT(1), quantity: 5, taxRuleId: tax.rows[0].id }])],
+  );
 
   // --- invoices + payments -------------------------------------------------------
   // Each billable subscription gets one invoice per ~month for the last 6 months.

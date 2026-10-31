@@ -15,12 +15,13 @@ const LIST = `
          COALESCE((SELECT SUM(p.amount) FROM payments p WHERE p.invoice_id = i.id AND p.status = 'POSTED'), 0)::float AS "amountPaid"
     FROM invoices i JOIN profiles c ON c.id = i.customer_id LEFT JOIN subscriptions s ON s.id = i.subscription_id`;
 
-export async function listInvoices(f: { status?: string; q?: string; customerId?: string; offset: number; limit: number }) {
+export async function listInvoices(f: { status?: string; q?: string; customerId?: string; hideDrafts?: boolean; offset: number; limit: number }) {
   const where: string[] = [];
   const params: unknown[] = [];
   const add = (sql: string, v: unknown) => { params.push(v); where.push(sql.replace('?', `$${params.length}`)); };
   if (f.status) add('i.status = ?', f.status);
   if (f.customerId) add('i.customer_id = ?', f.customerId);
+  if (f.hideDrafts) where.push(`i.status <> 'draft'`);
   if (f.q) add(`(i.invoice_number || ' ' || c.full_name) ILIKE ?`, `%${f.q}%`);
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const [items, count] = await Promise.all([
@@ -32,8 +33,8 @@ export async function listInvoices(f: { status?: string; q?: string; customerId?
 
 export async function getInvoice(id: string, actor: AuthUser) {
   const invoice = await queryOne(`${LIST} WHERE i.id = $1`, [id]);
-  // Customers get a plain "not found" for anyone else's invoice, even with a real id.
-  if (!invoice || (actor.role === 'CUSTOMER' && invoice.customerId !== actor.id)) throw notFound('Invoice');
+  // Customers get a plain "not found" for anyone else's invoice, even with a real id, and for drafts.
+  if (!invoice || (actor.role === 'CUSTOMER' && (invoice.customerId !== actor.id || invoice.status === 'draft'))) throw notFound('Invoice');
   const lines = await query(
     `SELECT description, quantity::float AS quantity, unit_price::float AS "unitPrice", tax_rate::float AS "taxRate",
             tax_amount::float AS "taxAmount", line_total::float AS "lineTotal"

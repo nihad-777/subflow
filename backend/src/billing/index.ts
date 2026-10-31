@@ -60,7 +60,7 @@ export function billingRouter() {
   portal.use(requireRole('CUSTOMER'));
   portal.get('/subscriptions', asyncHandler(async (req, res) => {
     const page = pagination(req.query);
-    res.json({ ...(await subs.listSubscriptions({ customerId: req.user!.id, ...page })), page: page.page, pageSize: page.pageSize });
+    res.json({ ...(await subs.listSubscriptions({ customerId: req.user!.id, hideDrafts: true, ...page })), page: page.page, pageSize: page.pageSize });
   }));
   portal.get('/subscriptions/:id', asyncHandler(async (req, res) => { res.json(await subs.getSubscription(uuidParam(req), req.user!)); }));
   portal.post('/subscriptions/:id/:action', asyncHandler(async (req, res) => {
@@ -72,7 +72,7 @@ export function billingRouter() {
   }));
   portal.get('/invoices', asyncHandler(async (req, res) => {
     const page = pagination(req.query);
-    res.json({ ...(await invoices.listInvoices({ customerId: req.user!.id, ...page })), page: page.page, pageSize: page.pageSize });
+    res.json({ ...(await invoices.listInvoices({ customerId: req.user!.id, hideDrafts: true, ...page })), page: page.page, pageSize: page.pageSize });
   }));
   portal.get('/invoices/:id', asyncHandler(async (req, res) => { res.json(await invoices.getInvoice(uuidParam(req), req.user!)); }));
   r.use('/portal', portal);

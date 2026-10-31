@@ -1,10 +1,11 @@
 import { createContext, FormEvent, useContext, useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, BadgePercent, Bell, Check, CircleHelp, Command, Home, LogOut, Menu, Package, Shield, Users, X } from 'lucide-react'
+import { ArrowRight, BadgePercent, Bell, Check, CreditCard, FileText, Percent, Repeat, CircleHelp, Command, Home, LogOut, Menu, Package, Shield, Users, X } from 'lucide-react'
 import type { Session, User } from '@supabase/supabase-js'
 import { AppRole, isSupabaseConfigured, Profile, supabase } from './supabase'
 import ProductWorkspace from './ProductWorkspace.jsx'
 import FinancePage from './finance/FinancePage'
+import { ApiScope, InvoicesPage, PortalPage, SubscriptionsPage, TaxRulesPage } from './billing/BillingPages'
 import './styles.css'
 
 type AuthState = { session: Session | null; user: User | null; profile: Profile | null; loading: boolean; refreshProfile: () => Promise<void> }
@@ -56,10 +57,12 @@ function LoginPage() {
   return <AuthLayout mode="login" title="Welcome back" subtitle="Enter your details to sign in to your workspace."><form className="form-stack" onSubmit={submit}><Field label="Email address" type="email" value={email} onChange={setEmail} placeholder="you@company.com" /><Field label="Password" type="password" value={password} onChange={setPassword} placeholder="Enter your password" /><div className="form-between"><label className="check-label"><input type="checkbox" /> <span>Remember me</span></label><Link to="/reset">Forgot password?</Link></div>{error && <p className="form-error">{error}</p>}<button className="primary-btn" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'} <ArrowRight size={17} /></button></form><p className="auth-switch">New to Subflow? <Link to="/register">Create an account</Link></p></AuthLayout>
 }
 
+const passwordProblem = (password: string) => password.length > 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /[^A-Za-z0-9]/.test(password) ? '' : 'Use more than 8 characters, with an uppercase letter, a lowercase letter and a special character.'
+
 function RegisterPage() {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [message, setMessage] = useState(''); const [busy, setBusy] = useState(false)
-  const submit = async (e: FormEvent) => { e.preventDefault(); setBusy(true); setError(''); const { error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } }); setBusy(false); if (signUpError) setError(signUpError.message); else setMessage('Check your email to confirm your account. Your account will start with customer access.') }
-  return <AuthLayout mode="register" title="Create your account" subtitle="Get your workspace ready in just a few moments."><form className="form-stack" onSubmit={submit}><Field label="Full name" value={name} onChange={setName} placeholder="Your name" /><Field label="Work email" type="email" value={email} onChange={setEmail} placeholder="you@company.com" /><Field label="Password" type="password" value={password} onChange={setPassword} placeholder="At least 8 characters" /><p className="field-hint">Use at least 8 characters for a stronger password.</p>{error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}<button className="primary-btn" disabled={busy}>{busy ? 'Creating account…' : 'Create account'} <ArrowRight size={17} /></button></form><p className="auth-switch">Already have an account? <Link to="/login">Sign in</Link></p></AuthLayout>
+  const submit = async (e: FormEvent) => { e.preventDefault(); setError(''); const problem = passwordProblem(password); if (problem) { setError(problem); return } setBusy(true); const { error: signUpError } = await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } }); setBusy(false); if (signUpError) setError(signUpError.message); else setMessage('Check your email to confirm your account. Your account will start with customer access.') }
+  return <AuthLayout mode="register" title="Create your account" subtitle="Get your workspace ready in just a few moments."><form className="form-stack" onSubmit={submit}><Field label="Full name" value={name} onChange={setName} placeholder="Your name" /><Field label="Work email" type="email" value={email} onChange={setEmail} placeholder="you@company.com" /><Field label="Password" type="password" value={password} onChange={setPassword} placeholder="More than 8 characters" /><p className="field-hint">Use more than 8 characters, with an uppercase letter, a lowercase letter and a special character.</p>{error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}<button className="primary-btn" disabled={busy}>{busy ? 'Creating account…' : 'Create account'} <ArrowRight size={17} /></button></form><p className="auth-switch">Already have an account? <Link to="/login">Sign in</Link></p></AuthLayout>
 }
 
 function ResetPage() {
@@ -72,13 +75,13 @@ function UpdatePasswordPage() {
   const [password, setPassword] = useState(''); const [confirm, setConfirm] = useState(''); const [error, setError] = useState(''); const [message, setMessage] = useState('')
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setError(''); setMessage('')
-    if (password.length < 8) { setError('Choose a password with at least 8 characters.'); return }
+    const problem = passwordProblem(password); if (problem) { setError(problem); return }
     if (password !== confirm) { setError('The passwords do not match.'); return }
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) setError(updateError.message)
     else { setMessage('Your password has been updated. You can now sign in with it.') }
   }
-  return <AuthLayout mode="reset" title="Choose a new password" subtitle="Make it at least 8 characters long."><form className="form-stack" onSubmit={submit}><Field label="New password" type="password" value={password} onChange={setPassword} placeholder="At least 8 characters" /><Field label="Confirm new password" type="password" value={confirm} onChange={setConfirm} placeholder="Enter it again" />{error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}<button className="primary-btn">Update password <ArrowRight size={17} /></button></form><p className="auth-switch"><Link to="/login">Back to sign in</Link></p></AuthLayout>
+  return <AuthLayout mode="reset" title="Choose a new password" subtitle="Use more than 8 characters, with upper and lower case and a special character."><form className="form-stack" onSubmit={submit}><Field label="New password" type="password" value={password} onChange={setPassword} placeholder="More than 8 characters" /><Field label="Confirm new password" type="password" value={confirm} onChange={setConfirm} placeholder="Enter it again" />{error && <p className="form-error">{error}</p>}{message && <p className="form-success">{message}</p>}<button className="primary-btn">Update password <ArrowRight size={17} /></button></form><p className="auth-switch"><Link to="/login">Back to sign in</Link></p></AuthLayout>
 }
 
 function Protected({ children, role }: { children: React.ReactNode; role?: AppRole }) {
@@ -94,15 +97,19 @@ const menu = [
   { label: 'Overview', icon: Home, path: '' },
   { label: 'My profile', icon: Users, path: '/profile' },
   { label: 'Products & plans', icon: Package, path: '/catalog', admin: true },
+  { label: 'My subscriptions', icon: CreditCard, path: '/portal', customer: true },
+  { label: 'Subscriptions', icon: Repeat, path: '/subscriptions', finance: true },
+  { label: 'Invoices', icon: FileText, path: '/invoices', finance: true },
   { label: 'Finance & reports', icon: BadgePercent, path: '/finance', finance: true },
+  { label: 'Tax rules', icon: Percent, path: '/taxes', admin: true },
   { label: 'Team members', icon: Users, path: '/team', admin: true },
 ]
 
 function Workspace({ children }: { children: React.ReactNode }) {
-  const { profile } = useAuth(); const [open, setOpen] = useState(false)
+  const { profile } = useAuth(); const [open, setOpen] = useState(false); const { pathname } = useLocation()
   const role = profile?.role || 'customer'
   const roleTitle = role.charAt(0).toUpperCase() + role.slice(1)
-  return <div className="workspace"><aside className={`sidebar ${open ? 'sidebar-open' : ''}`}><div className="side-brand"><Brand /><button className="icon-btn side-close" onClick={() => setOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-switch"><div className="workspace-avatar">S</div><div><b>Subflow workspace</b><span>{roleTitle} account</span></div><span className="switch-chevron">⌄</span></div><div className="side-label">WORKSPACE</div><nav className="side-nav">{menu.filter(item => (!item.admin || role === 'admin') && (!item.finance || role === 'admin' || role === 'staff')).map(item => <Link key={item.path} to={item.path ? `/app${item.path}` : `/app/${role}`} className={`side-link ${!item.path ? 'active' : ''}`} onClick={() => setOpen(false)}><item.icon size={17} /><span>{item.label}</span>{item.admin && <span className="nav-count">{role === 'admin' ? '›' : ''}</span>}</Link>)}</nav><div className="sidebar-bottom"><div className="help-box"><div className="help-icon"><CircleHelp size={16} /></div><b>Need a hand?</b><span>Our team is here to help.</span><a href="mailto:support@subflow.app">Visit help center <ArrowRight size={13} /></a></div><div className="side-profile"><div className="profile-avatar">{(profile?.full_name || profile?.email || 'U').slice(0, 1).toUpperCase()}</div><div className="profile-copy"><b>{profile?.full_name || 'Your profile'}</b><span>{profile?.email}</span></div><button className="icon-btn logout-btn" title="Sign out" onClick={() => void supabase.auth.signOut()}><LogOut size={17} /></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-btn menu-toggle" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div className="breadcrumb">Workspace <span>/</span> <b>{roleTitle} overview</b></div><div className="top-actions"><button className="icon-btn notification-btn" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">{(profile?.full_name || 'U').slice(0, 1).toUpperCase()}</div></div></header><main className="page-content">{children}</main></div>{open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}</div>
+  return <div className="workspace"><aside className={`sidebar ${open ? 'sidebar-open' : ''}`}><div className="side-brand"><Brand /><button className="icon-btn side-close" onClick={() => setOpen(false)} aria-label="Close menu"><X size={18} /></button></div><div className="workspace-switch"><div className="workspace-avatar">S</div><div><b>Subflow workspace</b><span>{roleTitle} account</span></div><span className="switch-chevron">⌄</span></div><div className="side-label">WORKSPACE</div><nav className="side-nav">{menu.filter(item => (!item.admin || role === 'admin') && (!item.finance || role === 'admin' || role === 'staff') && (!item.customer || role === 'customer')).map(item => <Link key={item.path} to={item.path ? `/app${item.path}` : `/app/${role}`} className={`side-link ${pathname === (item.path ? `/app${item.path}` : `/app/${role}`) ? 'active' : ''}`} onClick={() => setOpen(false)}><item.icon size={17} /><span>{item.label}</span>{item.admin && <span className="nav-count">{role === 'admin' ? '›' : ''}</span>}</Link>)}</nav><div className="sidebar-bottom"><div className="help-box"><div className="help-icon"><CircleHelp size={16} /></div><b>Need a hand?</b><span>Our team is here to help.</span><a href="mailto:support@subflow.app">Visit help center <ArrowRight size={13} /></a></div><div className="side-profile"><div className="profile-avatar">{(profile?.full_name || profile?.email || 'U').slice(0, 1).toUpperCase()}</div><div className="profile-copy"><b>{profile?.full_name || 'Your profile'}</b><span>{profile?.email}</span></div><button className="icon-btn logout-btn" title="Sign out" onClick={() => void supabase.auth.signOut()}><LogOut size={17} /></button></div></div></aside><div className="main-column"><header className="topbar"><button className="icon-btn menu-toggle" onClick={() => setOpen(true)} aria-label="Open menu"><Menu size={20} /></button><div className="breadcrumb">Workspace <span>/</span> <b>{roleTitle} overview</b></div><div className="top-actions"><button className="icon-btn notification-btn" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">{(profile?.full_name || 'U').slice(0, 1).toUpperCase()}</div></div></header><main className="page-content">{children}</main></div>{open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Close navigation" />}</div>
 }
 
 function DashboardPage() {
@@ -145,8 +152,28 @@ function WorkspaceRoute() {
   if (window.location.pathname.endsWith('/team')) return <Protected role="admin"><Workspace><TeamPage /></Workspace></Protected>
   if (window.location.pathname.endsWith('/profile')) return <Protected><Workspace><ProfilePage /></Workspace></Protected>
   if (window.location.pathname.endsWith('/finance')) return <FinanceRoute />
-  if (window.location.pathname.endsWith('/catalog')) return <Protected role="admin"><Workspace><ProductWorkspace /></Workspace></Protected>
+  if (window.location.pathname.endsWith('/subscriptions')) return <InternalRoute><SubscriptionsPage /></InternalRoute>
+  if (window.location.pathname.endsWith('/invoices')) return <InternalRoute><InvoicesPage /></InternalRoute>
+  if (window.location.pathname.endsWith('/taxes')) return <InternalRoute adminOnly><TaxRulesPage /></InternalRoute>
+  if (window.location.pathname.endsWith('/portal')) return <PortalRoute />
+  if (window.location.pathname.endsWith('/catalog')) return <Protected role="admin"><Workspace><CatalogRoute /></Workspace></Protected>
   return <Protected><Workspace><DashboardPage /></Workspace></Protected>
+}
+
+function CatalogRoute() {
+  const { session } = useAuth()
+  return <ApiScope session={session} plain><ProductWorkspace /></ApiScope>
+}
+
+function InternalRoute({ children, adminOnly }: { children: React.ReactNode; adminOnly?: boolean }) {
+  const { profile, session } = useAuth()
+  if (profile && (profile.role === 'customer' || (adminOnly && profile.role !== 'admin'))) return <Navigate to={`/app/${profile.role}`} replace />
+  return <Protected><Workspace><ApiScope session={session} isAdmin={profile?.role === 'admin'}>{children}</ApiScope></Workspace></Protected>
+}
+
+function PortalRoute() {
+  const { session } = useAuth()
+  return <Protected role="customer"><Workspace><ApiScope session={session}><PortalPage /></ApiScope></Workspace></Protected>
 }
 
 function FinanceRoute() {
@@ -156,7 +183,7 @@ function FinanceRoute() {
 }
 
 function App() {
-  return <AuthProvider>{!isSupabaseConfigured ? <ConfigNotice /> : <Routes><Route path="/" element={<Navigate to="/app" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/reset" element={<ResetPage />} /><Route path="/update-password" element={<UpdatePasswordPage />} /><Route path="/app" element={<AppHome />} /><Route path="/app/:role" element={<WorkspaceRoute />} /><Route path="/app/team" element={<WorkspaceRoute />} /><Route path="/app/profile" element={<WorkspaceRoute />} /><Route path="/app/catalog" element={<WorkspaceRoute />} /><Route path="/app/finance" element={<WorkspaceRoute />} /><Route path="*" element={<Navigate to="/app" replace />} /></Routes>}</AuthProvider>
+  return <AuthProvider>{!isSupabaseConfigured ? <ConfigNotice /> : <Routes><Route path="/" element={<Navigate to="/app" replace />} /><Route path="/login" element={<LoginPage />} /><Route path="/register" element={<RegisterPage />} /><Route path="/reset" element={<ResetPage />} /><Route path="/update-password" element={<UpdatePasswordPage />} /><Route path="/app" element={<AppHome />} /><Route path="/app/:role" element={<WorkspaceRoute />} /><Route path="/app/team" element={<WorkspaceRoute />} /><Route path="/app/profile" element={<WorkspaceRoute />} /><Route path="/app/catalog" element={<WorkspaceRoute />} /><Route path="/app/finance" element={<WorkspaceRoute />} /><Route path="/app/subscriptions" element={<WorkspaceRoute />} /><Route path="/app/invoices" element={<WorkspaceRoute />} /><Route path="/app/taxes" element={<WorkspaceRoute />} /><Route path="/app/portal" element={<WorkspaceRoute />} /><Route path="*" element={<Navigate to="/app" replace />} /></Routes>}</AuthProvider>
 }
 
 function AppHome() { const { loading, user, profile } = useAuth(); if (loading) return <div className="loading-screen"><span className="spinner" /> Loading your workspace</div>; if (!user) return <Navigate to="/login" replace />; return <Navigate to={`/app/${profile?.role || 'customer'}`} replace /> }
